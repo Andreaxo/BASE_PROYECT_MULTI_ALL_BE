@@ -2,7 +2,10 @@ package access_control
 
 import (
 	"log"
+
 	"gorm.io/gorm"
+
+	menuDomain "multicliente-backend/internal/features/menu/domain"
 	roleDomain "multicliente-backend/internal/features/role/domain"
 )
 
@@ -52,10 +55,50 @@ func SeedPermissions(db *gorm.DB) error {
 		{RoleID: 1, MenuID: 10, OptionID: 2},
 		{RoleID: 1, MenuID: 10, OptionID: 3},
 		{RoleID: 1, MenuID: 10, OptionID: 4},
+		// Permissions for Referidos (MenuID 11)
+		{RoleID: 1, MenuID: 11, OptionID: 1},
+		{RoleID: 1, MenuID: 11, OptionID: 2},
+		{RoleID: 1, MenuID: 11, OptionID: 3},
+		{RoleID: 1, MenuID: 11, OptionID: 4},
+		{RoleID: 2, MenuID: 11, OptionID: 1},
+		{RoleID: 2, MenuID: 11, OptionID: 2},
+		{RoleID: 2, MenuID: 11, OptionID: 3},
+		{RoleID: 2, MenuID: 11, OptionID: 4},
+		{RoleID: 3, MenuID: 11, OptionID: 1},
+		{RoleID: 3, MenuID: 11, OptionID: 2},
+		// Permissions for Beneficios (MenuID 12)
+		{RoleID: 1, MenuID: 12, OptionID: 1},
+		{RoleID: 1, MenuID: 12, OptionID: 2},
+		{RoleID: 1, MenuID: 12, OptionID: 3},
+		{RoleID: 1, MenuID: 12, OptionID: 4},
+		{RoleID: 2, MenuID: 12, OptionID: 1},
+		{RoleID: 2, MenuID: 12, OptionID: 2},
+		{RoleID: 2, MenuID: 12, OptionID: 3},
+		{RoleID: 2, MenuID: 12, OptionID: 4},
+		{RoleID: 3, MenuID: 12, OptionID: 1},
+		{RoleID: 3, MenuID: 12, OptionID: 2},
+		{RoleID: 7, MenuID: 12, OptionID: 1},
+		{RoleID: 7, MenuID: 12, OptionID: 2},
+		{RoleID: 7, MenuID: 12, OptionID: 3},
+		{RoleID: 7, MenuID: 12, OptionID: 4},
+		// Permissions for Rifas (MenuID 13)
+		{RoleID: 1, MenuID: 13, OptionID: 1},
+		{RoleID: 1, MenuID: 13, OptionID: 2},
+		{RoleID: 1, MenuID: 13, OptionID: 3},
+		{RoleID: 1, MenuID: 13, OptionID: 4},
+		{RoleID: 2, MenuID: 13, OptionID: 1},
+		{RoleID: 2, MenuID: 13, OptionID: 2},
+		{RoleID: 2, MenuID: 13, OptionID: 3},
+		{RoleID: 2, MenuID: 13, OptionID: 4},
+		{RoleID: 3, MenuID: 13, OptionID: 1},
+		{RoleID: 3, MenuID: 13, OptionID: 2},
 	}
 	for _, p := range permissions {
-		if err := db.FirstOrCreate(&p, roleDomain.Permission{RoleID: p.RoleID, MenuID: p.MenuID, OptionID: p.OptionID}).Error; err != nil {
-			return err
+		var existingMenu menuDomain.Menu
+		if err := db.Where("id = ?", p.MenuID).First(&existingMenu).Error; err == nil {
+			if err := db.FirstOrCreate(&p, roleDomain.Permission{RoleID: p.RoleID, MenuID: p.MenuID, OptionID: p.OptionID}).Error; err != nil {
+				return err
+			}
 		}
 	}
 	log.Println("✅ Permissions seeded")

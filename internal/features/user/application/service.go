@@ -114,10 +114,6 @@ func (s *userService) UpdateUser(id uint, req *domain.UpdateUserRequest, updated
 		user.RoleID = req.RoleID
 	}
 
-	if req.PhotoURL != nil {
-		user.PhotoURL = *req.PhotoURL
-	}
-
 	if req.CompanyIDs != nil {
 		companies := make([]companyDomain.Company, len(req.CompanyIDs))
 		for i, cid := range req.CompanyIDs {

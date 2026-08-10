@@ -17,9 +17,11 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, requireRole gin.Handle
 
 	companies := router.Group("/companies")
 	{
-		companies.GET("", middleware.RequirePermission(db, "/companies", "VIEW"), handler.GetAll)
-		companies.GET("/:id", middleware.RequirePermission(db, "/companies", "VIEW"), handler.GetByID)
-		
+		// Any authenticated user can view companies
+		companies.GET("", handler.GetAll)
+		companies.GET("/:id", handler.GetByID)
+
+		// Admin operations require explicit permission
 		companies.POST("", middleware.RequirePermission(db, "/companies", "CREATE"), handler.Create)
 		companies.PUT("/:id", middleware.RequirePermission(db, "/companies", "EDIT"), handler.Update)
 		companies.DELETE("/:id", middleware.RequirePermission(db, "/companies", "DELETE"), handler.Delete)

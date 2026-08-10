@@ -12,6 +12,7 @@ func SeedRoles(db *gorm.DB) error {
 		{ID: 1, Name: "Super Administrador", Code: "superadmin", Description: "Super Administrador del sistema con acceso total.", SessionDays: 30, SessionHours: 0, SessionMinutes: 0, IsActive: true},
 		{ID: 2, Name: "Administrador", Code: "admin", Description: "Administrador de la empresa con acceso a sucursales.", SessionDays: 7, SessionHours: 0, SessionMinutes: 0, IsActive: true},
 		{ID: 3, Name: "Usuario", Code: "user", Description: "Usuario de la empresa con permisos estándar de inventario.", SessionDays: 1, SessionHours: 0, SessionMinutes: 0, IsActive: true},
+		{ID: 7, Name: "Negocio", Code: "business_validator", Description: "Usuario validador de redenciones de beneficios de una empresa aliada", SessionDays: 1, SessionHours: 0, SessionMinutes: 0, IsActive: true},
 	}
 	for _, r := range roles {
 		var existing roleDomain.Role

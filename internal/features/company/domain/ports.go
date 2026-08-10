@@ -1,7 +1,7 @@
 package domain
 
 type CompanyRepository interface {
-	Create(company *Company) error
+	Create(company *Company, req *CreateCompanyRequest) error
 	FindByID(id uint) (*Company, error)
 	FindAll() ([]Company, error)
 	Update(company *Company) error

@@ -69,7 +69,22 @@ func (r *menuRepository) Update(menu *domain.Menu) error {
 }
 
 func (r *menuRepository) Delete(id uint) error {
-	return r.db.Delete(&domain.Menu{}, "id = ?", id).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		// Delete permissions for submenus of this menu
+		if err := tx.Exec("DELETE FROM administrative.permissions WHERE menu_id IN (SELECT id FROM administrative.menus WHERE parent_id = ?)", id).Error; err != nil {
+			return err
+		}
+		// Delete submenus of this menu
+		if err := tx.Exec("DELETE FROM administrative.menus WHERE parent_id = ?", id).Error; err != nil {
+			return err
+		}
+		// Delete permissions for this menu
+		if err := tx.Exec("DELETE FROM administrative.permissions WHERE menu_id = ?", id).Error; err != nil {
+			return err
+		}
+		// Delete the menu itself
+		return tx.Exec("DELETE FROM administrative.menus WHERE id = ?", id).Error
+	})
 }
 
 func (r *menuRepository) GetAllowedMenusForRole(roleID uint) ([]domain.AllowedMenuResponse, error) {

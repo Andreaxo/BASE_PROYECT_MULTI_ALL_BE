@@ -67,6 +67,15 @@ func (r *userRepository) FindByEmail(email string) (*domain.User, error) {
 	return &user, nil
 }
 
+func (r *userRepository) FindByCodeRefer(code string) (*domain.User, error) {
+	var user domain.User
+	if err := r.db.Preload("Role").Preload("Companies").First(&user, "code_refer = ?", code).Error; err != nil {
+		return nil, err
+	}
+	r.populateAudits([]*domain.User{&user})
+	return &user, nil
+}
+
 func (r *userRepository) FindAll() ([]domain.User, error) {
 	var users []domain.User
 	if err := r.db.Preload("Role").Preload("Companies").Order("create_at DESC").Find(&users).Error; err != nil {

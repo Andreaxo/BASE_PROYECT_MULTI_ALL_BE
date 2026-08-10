@@ -9,12 +9,18 @@ import (
 	"multicliente-backend/internal/features/article"
 	articleDomain "multicliente-backend/internal/features/article/domain"
 	"multicliente-backend/internal/features/auth"
+	"multicliente-backend/internal/features/benefit"
+	benefitDomain "multicliente-backend/internal/features/benefit/domain"
+	"multicliente-backend/internal/features/benefit_redemption"
 	"multicliente-backend/internal/features/category"
 	categoryDomain "multicliente-backend/internal/features/category/domain"
 	"multicliente-backend/internal/features/company"
 	companyDomain "multicliente-backend/internal/features/company/domain"
 	"multicliente-backend/internal/features/menu"
 	menuDomain "multicliente-backend/internal/features/menu/domain"
+	"multicliente-backend/internal/features/referido"
+	referidoDomain "multicliente-backend/internal/features/referido/domain"
+	"multicliente-backend/internal/features/rifa"
 	"multicliente-backend/internal/features/role"
 	roleDomain "multicliente-backend/internal/features/role/domain"
 	"multicliente-backend/internal/features/upload"
@@ -39,13 +45,16 @@ func main() {
 	}
 	log.Println("✅ Database connected successfully")
 
-	// Run auto-migrations in order of dependency
-	// Note: Drop legacy UUID columns if they exist in administrative.users, as PostgreSQL cannot alter UUID to bigint directly
-	_ = db.Exec("ALTER TABLE administrative.users DROP COLUMN IF EXISTS create_by")
-	_ = db.Exec("ALTER TABLE administrative.users DROP COLUMN IF EXISTS update_by")
+	// // Run auto-migrations in order of dependency
+	// // Note: Drop legacy UUID columns if they exist in administrative.users, as PostgreSQL cannot alter UUID to bigint directly
+	// _ = db.Exec("ALTER TABLE administrative.users DROP COLUMN IF EXISTS create_by")
+	// _ = db.Exec("ALTER TABLE administrative.users DROP COLUMN IF EXISTS update_by")
+	// // Safety: drop leftover constraints that GORM may try to manage but don't exist in DB yet
+	// _ = db.Exec(`ALTER TABLE "administrative"."companies" DROP CONSTRAINT IF EXISTS "uni_companies_nit"`)
 
 	err = migrations.Migrate(db,
 		&companyDomain.Company{},
+		&benefitDomain.Benefit{},
 		&categoryDomain.Category{},
 		&articleDomain.Article{},
 		&roleDomain.Role{},
@@ -53,6 +62,7 @@ func main() {
 		&roleDomain.Permission{},
 		&menuDomain.Menu{},
 		&userDomain.User{},
+		&referidoDomain.Referido{},
 	)
 	if err != nil {
 		log.Fatalf("❌ Failed to run migrations: %v", err)
@@ -78,12 +88,16 @@ func main() {
 
 	// Register features
 	userRepo := user.RegisterRoutes(protected, db)
-	auth.RegisterRoutes(api, userRepo, cfg.JWTSecret, cfg.JWTExpirationHours)
+	referidoSvc := referido.RegisterRoutes(protected, db)
+	auth.RegisterRoutes(api, userRepo, referidoSvc, cfg.JWTSecret, cfg.JWTExpirationHours)
 	company.RegisterRoutes(protected, db, superAdminRequired)
 	role.RegisterRoutes(protected, db, superAdminRequired)
 	menu.RegisterRoutes(protected, db, superAdminRequired)
+	benefit.RegisterRoutes(protected, db, requireCompanyAccess)
 	category.RegisterRoutes(protected, db, requireCompanyAccess)
 	article.RegisterRoutes(protected, db, requireCompanyAccess)
+	rifa.RegisterRoutes(protected, db)
+	benefit_redemption.RegisterRoutes(protected, db)
 	upload.RegisterRoutes(protected)
 
 	// Health check (public)

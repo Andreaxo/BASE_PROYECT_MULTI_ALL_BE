@@ -15,13 +15,15 @@ func NewCompanyService(repo domain.CompanyRepository) domain.CompanyService {
 
 func (s *companyService) CreateCompany(req *domain.CreateCompanyRequest, createdBy *uint) (*domain.Company, error) {
 	company := &domain.Company{
-		Name:     req.Name,
-		IsActive: true,
-		CreateBy: createdBy,
-		PhotoURL: req.PhotoURL,
+		Name:        req.Name,
+		IsActive:    true,
+		CreateBy:    createdBy,
+		PhotoURL:    req.PhotoURL,
+		NIT:         req.NIT,
+		RazonSocial: req.RazonSocial,
 	}
 
-	if err := s.repo.Create(company); err != nil {
+	if err := s.repo.Create(company, req); err != nil {
 		return nil, err
 	}
 
@@ -49,6 +51,15 @@ func (s *companyService) UpdateCompany(id uint, req *domain.UpdateCompanyRequest
 	if req.Name != nil {
 		company.Name = *req.Name
 	}
+
+	if req.NIT != nil {
+		company.NIT = req.NIT
+	}
+
+	if req.RazonSocial != nil {
+		company.RazonSocial = *req.RazonSocial
+	}
+
 	if req.IsActive != nil {
 		company.IsActive = *req.IsActive
 	}

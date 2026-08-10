@@ -22,8 +22,8 @@ func RequirePermission(db *gorm.DB, menuRoute string, optionCode string) gin.Han
 		}
 		roleCode := roleCodeVal.(string)
 
-		// Superadmin always has access
-		if roleCode == "superadmin" {
+		// Superadmin always has access. Business validator has access to benefit & redemption routes
+		if roleCode == "superadmin" || (roleCode == "business_validator" && (menuRoute == "/benefit" || menuRoute == "/company-benefits" || menuRoute == "/redemptions")) {
 			c.Next()
 			return
 		}

@@ -14,7 +14,7 @@ func SeedMenus(db *gorm.DB) error {
 	menus := []menuDomain.Menu{
 		{ID: 8, Label: "Control de Acceso", LabelEN: "Access Control", LabelFR: "Contrôle d'Accès", Route: "/access-control", Icon: "security_rounded", SortOrder: 1, IsActive: true, ParentID: nil},
 		{ID: 1, Label: "Usuarios", LabelEN: "Users", LabelFR: "Utilisateurs", Route: "/users", Icon: "people_rounded", SortOrder: 1, IsActive: true, ParentID: &accessControlID},
-		{ID: 2, Label: "Empresas", LabelEN: "Companies", LabelFR: "Entreprises", Route: "/companies", Icon: "business_rounded", SortOrder: 2, IsActive: true, ParentID: &accessControlID},
+		{ID: 2, Label: "Negocios Aliados", LabelEN: "Allied Businesses", LabelFR: "Partenaires", Route: "/companies", Icon: "store_rounded", SortOrder: 2, IsActive: true, ParentID: &accessControlID},
 		{ID: 3, Label: "Roles", LabelEN: "Roles", LabelFR: "Rôles", Route: "/roles", Icon: "admin_panel_settings_rounded", SortOrder: 3, IsActive: true, ParentID: &accessControlID},
 		{ID: 4, Label: "Menús", LabelEN: "Menus", LabelFR: "Menus", Route: "/menus", Icon: "menu_rounded", SortOrder: 4, IsActive: true, ParentID: &accessControlID},
 		{ID: 5, Label: "Inventarios", LabelEN: "Inventory", LabelFR: "Inventaires", Route: "/inventory", Icon: "inventory_2_rounded", SortOrder: 10, IsActive: true, ParentID: nil},
@@ -22,12 +22,20 @@ func SeedMenus(db *gorm.DB) error {
 		{ID: 7, Label: "Artículos", LabelEN: "Items", LabelFR: "Articles", Route: "/items", Icon: "inventory_rounded", SortOrder: 12, IsActive: true, ParentID: &inventariosID},
 		{ID: 9, Label: "Estadísticas", LabelEN: "Statistics", LabelFR: "Statistiques", Route: "/statistics", Icon: "bar_chart_rounded", SortOrder: 20, IsActive: true, ParentID: nil},
 		{ID: 10, Label: "Dashboard", LabelEN: "Dashboard", LabelFR: "Tableau de Bord", Route: "/statistics/dashboard", Icon: "dashboard_rounded", SortOrder: 21, IsActive: true, ParentID: &statisticsID},
+		{ID: 11, Label: "Referidos", LabelEN: "Referrals", LabelFR: "Parrainage", Route: "/referidos", Icon: "share_rounded", SortOrder: 30, IsActive: true, ParentID: nil},
+		{ID: 12, Label: "Beneficios", LabelEN: "Benefits", LabelFR: "Avantages", Route: "/benefit", Icon: "card_giftcard_rounded", SortOrder: 25, IsActive: true, ParentID: nil},
+		{ID: 13, Label: "Rifas", LabelEN: "Raffles", LabelFR: "Tirages au sort", Route: "/rifas", Icon: "confirmation_number_rounded", SortOrder: 35, IsActive: true, ParentID: nil},
 	}
+	var tableCount int64
+	db.Model(&menuDomain.Menu{}).Count(&tableCount)
+
 	for _, m := range menus {
 		var existing menuDomain.Menu
 		if err := db.Where("id = ?", m.ID).First(&existing).Error; err != nil {
-			if err := db.Create(&m).Error; err != nil {
-				return err
+			if tableCount == 0 {
+				if err := db.Create(&m).Error; err != nil {
+					return err
+				}
 			}
 		} else {
 			existing.Label = m.Label
