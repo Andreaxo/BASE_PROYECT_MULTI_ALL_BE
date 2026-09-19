@@ -77,10 +77,6 @@ func SeedPermissions(db *gorm.DB) error {
 		{RoleID: 2, MenuID: 12, OptionID: 4},
 		{RoleID: 3, MenuID: 12, OptionID: 1},
 		{RoleID: 3, MenuID: 12, OptionID: 2},
-		{RoleID: 7, MenuID: 12, OptionID: 1},
-		{RoleID: 7, MenuID: 12, OptionID: 2},
-		{RoleID: 7, MenuID: 12, OptionID: 3},
-		{RoleID: 7, MenuID: 12, OptionID: 4},
 		// Permissions for Rifas (MenuID 13)
 		{RoleID: 1, MenuID: 13, OptionID: 1},
 		{RoleID: 1, MenuID: 13, OptionID: 2},

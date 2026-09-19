@@ -1,6 +1,9 @@
 package domain
 
-import userDomain "multicliente-backend/internal/features/user/domain"
+import (
+	companyDomain "multicliente-backend/internal/features/company/domain"
+	userDomain "multicliente-backend/internal/features/user/domain"
+)
 
 // AuthService defines the primary port for authentication operations.
 type AuthService interface {
@@ -10,5 +13,6 @@ type AuthService interface {
 	GetMyCodeRefer(userID uint) (string, error)
 	ChangePassword(userID uint, req *ChangePasswordRequest) error
 	UpdateProfile(userID uint, req *UpdateProfileRequest) (*userDomain.User, error)
+	ValidarCodigoEmpresa(codigo string) (*companyDomain.Company, error)
 }
 

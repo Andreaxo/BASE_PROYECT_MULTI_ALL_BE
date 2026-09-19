@@ -9,25 +9,26 @@ import (
 // cleanupOrphanedConstraints pre-creates orphaned constraints that GORM will try to DROP
 // without IF EXISTS during AutoMigrate. By ensuring they exist beforehand, the DROP succeeds cleanly.
 func cleanupOrphanedConstraints(db *gorm.DB) {
-	// GORM may attempt to drop "uni_companies_nit" if the NIT field was previously tagged
-	// with uniqueIndex. We create it if missing so the DROP succeeds, then recreate if needed.
 	_ = db.Exec(`
 		DO $$
 		BEGIN
-			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.table_constraints
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
 				WHERE table_schema = 'administrative'
 				  AND table_name = 'companies'
-				  AND constraint_name = 'uni_companies_nit'
+				  AND column_name = 'codigo_empresa'
 			) THEN
-				-- Temporarily create the constraint so GORM can cleanly drop it
-				IF EXISTS (
-					SELECT 1 FROM information_schema.columns
+				IF NOT EXISTS (
+					SELECT 1 FROM information_schema.table_constraints
 					WHERE table_schema = 'administrative'
 					  AND table_name = 'companies'
-					  AND column_name = 'nit'
+					  AND constraint_name = 'uni_companies_codigo_empresa'
 				) THEN
-					EXECUTE 'ALTER TABLE administrative.companies ADD CONSTRAINT uni_companies_nit UNIQUE (nit)';
+					BEGIN
+						ALTER TABLE administrative.companies ADD CONSTRAINT uni_companies_codigo_empresa UNIQUE (codigo_empresa);
+					EXCEPTION WHEN OTHERS THEN
+						NULL;
+					END;
 				END IF;
 			END IF;
 		END $$;
@@ -44,6 +45,8 @@ func Migrate(db *gorm.DB, models ...interface{}) error {
 	if err := db.Exec("CREATE SCHEMA IF NOT EXISTS app").Error; err != nil {
 		return fmt.Errorf("failed to create schema app: %w", err)
 	}
+
+	cleanupOrphanedConstraints(db)
 
 	if err := db.AutoMigrate(models...); err != nil {
 		return err
@@ -140,9 +143,165 @@ func Migrate(db *gorm.DB, models ...interface{}) error {
 		}
 	}
 
+	// Constraints and indexes for membresia and pago_membresia
+	membresiaConstraints := []string{
+		`DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'membresia'
+				  AND constraint_name = 'chk_membresia_estado'
+			) THEN
+				ALTER TABLE administrative.membresia
+				ADD CONSTRAINT chk_membresia_estado
+				CHECK (estado IN ('inactiva', 'activa', 'vencida', 'cancelada'));
+			END IF;
+		END $$`,
+		`DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'pago_membresia'
+				  AND constraint_name = 'chk_pago_estado'
+			) THEN
+				ALTER TABLE administrative.pago_membresia
+				ADD CONSTRAINT chk_pago_estado
+				CHECK (estado IN ('pendiente', 'aprobado', 'rechazado'));
+			END IF;
+		END $$`,
+		`DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'pago_membresia'
+				  AND constraint_name = 'chk_pago_tipo'
+			) THEN
+				ALTER TABLE administrative.pago_membresia
+				ADD CONSTRAINT chk_pago_tipo
+				CHECK (tipo IN ('inicial', 'renovacion'));
+			END IF;
+		END $$`,
+		`DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'companies'
+				  AND constraint_name = 'chk_companies_suscripcion_estado'
+			) THEN
+				ALTER TABLE administrative.companies
+				ADD CONSTRAINT chk_companies_suscripcion_estado
+				CHECK (suscripcion_estado IN ('prueba', 'activa', 'vencida', 'suspendida'));
+			END IF;
+		END $$`,
+	}
+
+	membresiaIndexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_pago_membresia ON administrative.pago_membresia(membresia_id)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_pago_membresia_referencia_unica ON administrative.pago_membresia(referencia_pasarela) WHERE referencia_pasarela IS NOT NULL`,
+	}
+
+	for _, stmt := range membresiaConstraints {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("failed to create membresia constraint: %w", err)
+		}
+	}
+
+	for _, stmt := range membresiaIndexes {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("failed to create membresia index: %w", err)
+		}
+	}
+
 	// Backfill estado='activo' and is_active=true for benefits if null
 	_ = db.Exec("UPDATE administrative.benefit SET estado = 'activo' WHERE estado IS NULL OR estado = ''")
 	_ = db.Exec("UPDATE administrative.benefit SET is_active = true WHERE is_active IS NULL")
+
+	// Ensure business_validator (role_id 7) has no access to global admin benefits table (menu_id 12)
+	_ = db.Exec("DELETE FROM administrative.permissions WHERE role_id = 7 AND menu_id = 12")
+
+	// Backfill user_companies from users.empresa_id for existing validator/negocio users
+	_ = db.Exec(`
+		INSERT INTO administrative.user_companies (user_id, company_id)
+		SELECT id, empresa_id FROM administrative.users
+		WHERE empresa_id IS NOT NULL AND empresa_id > 0
+		ON CONFLICT DO NOTHING
+	`)
+
+	// Clean up any failed or legacy GORM index on nit
+	_ = db.Exec("DROP INDEX IF EXISTS administrative.idx_administrative_companies_nit")
+	_ = db.Exec("DROP INDEX IF EXISTS administrative.idx_administrative_companies_razon_social")
+
+	// Deduplicate any existing duplicate NITs before creating unique index
+	_ = db.Exec(`
+		UPDATE administrative.companies c1
+		SET nit = c1.nit + c1.id
+		WHERE c1.nit IS NOT NULL
+		  AND c1.id > (SELECT MIN(c2.id) FROM administrative.companies c2 WHERE c2.nit = c1.nit);
+	`)
+
+	// Deduplicate any existing duplicate razon_social before creating unique index
+	_ = db.Exec(`
+		UPDATE administrative.companies c1
+		SET razon_social = c1.razon_social || ' ' || c1.id
+		WHERE TRIM(c1.razon_social) <> ''
+		  AND c1.id > (SELECT MIN(c2.id) FROM administrative.companies c2 WHERE LOWER(TRIM(c2.razon_social)) = LOWER(TRIM(c1.razon_social)));
+	`)
+
+	// Ensure unique index for companies nit (ignoring nulls)
+	_ = db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_nit_unique
+		ON administrative.companies (nit)
+		WHERE nit IS NOT NULL;
+	`)
+
+	// Ensure unique index for companies razon_social (ignoring empty strings)
+	_ = db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_razon_social_unique
+		ON administrative.companies (LOWER(TRIM(razon_social)))
+		WHERE razon_social IS NOT NULL AND TRIM(razon_social) <> '';
+	`)
+
+	// Ensure unique index for companies name (case-insensitive)
+	_ = db.Exec(`
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_companies_name_unique
+		ON administrative.companies (LOWER(TRIM(name)));
+	`)
+
+	// Ensure foreign keys on user_companies cascade on delete so deleting companies or users succeeds cleanly
+	_ = db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'user_companies'
+				  AND constraint_name = 'fk_administrative_user_companies_company'
+			) THEN
+				ALTER TABLE administrative.user_companies
+				DROP CONSTRAINT fk_administrative_user_companies_company;
+			END IF;
+
+			ALTER TABLE administrative.user_companies
+			ADD CONSTRAINT fk_administrative_user_companies_company
+			FOREIGN KEY (company_id) REFERENCES administrative.companies(id) ON DELETE CASCADE;
+
+			IF EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'user_companies'
+				  AND constraint_name = 'fk_administrative_user_companies_user'
+			) THEN
+				ALTER TABLE administrative.user_companies
+				DROP CONSTRAINT fk_administrative_user_companies_user;
+			END IF;
+
+			ALTER TABLE administrative.user_companies
+			ADD CONSTRAINT fk_administrative_user_companies_user
+			FOREIGN KEY (user_id) REFERENCES administrative.users(id) ON DELETE CASCADE;
+		EXCEPTION WHEN OTHERS THEN
+			NULL;
+		END $$;
+	`)
 
 	return nil
 }

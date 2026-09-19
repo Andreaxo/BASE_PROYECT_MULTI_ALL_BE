@@ -16,11 +16,13 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) domain.RedemptionServi
 	service := application.NewRedemptionService(repo)
 	handler := infrastructure.NewRedemptionHandler(service)
 
-	// Employee endpoints — any authenticated user
+	requireMembresia := middleware.RequireMembresiaActiva(db)
+
+	// Employee endpoints — gated by active membership for affiliates
 	benefits := router.Group("/benefits")
 	{
-		benefits.GET("/mis-redenciones", handler.GetMisRedenciones)
-		benefits.POST("/:id/redeem", handler.RedeemBenefit)
+		benefits.GET("/mis-redenciones", requireMembresia, handler.GetMisRedenciones)
+		benefits.POST("/:id/redeem", requireMembresia, handler.RedeemBenefit)
 	}
 
 	// Business validator endpoints — requires business_validator role

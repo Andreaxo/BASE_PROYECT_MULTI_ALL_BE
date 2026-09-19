@@ -21,13 +21,15 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) domain.RifaService {
 	service := application.NewRifaService(db, rifaRepo, participacionRepo, ganadorRepo, referidoRepo)
 	handler := infrastructure.NewRifaHandler(service)
 
+	requireMembresia := middleware.RequireMembresiaActiva(db)
+
 	rifas := router.Group("/rifas")
 	{
-		// User endpoints
-		rifas.GET("/activa", handler.GetActiva)
-		rifas.GET("/mis-participaciones", handler.GetMisParticipaciones)
-		rifas.GET("/historial", handler.GetHistorial)
-		rifas.POST("/:id/participar", handler.Participar)
+		// User endpoints (gated by active membership for affiliates)
+		rifas.GET("/activa", requireMembresia, handler.GetActiva)
+		rifas.GET("/mis-participaciones", requireMembresia, handler.GetMisParticipaciones)
+		rifas.GET("/historial", requireMembresia, handler.GetHistorial)
+		rifas.POST("/:id/participar", requireMembresia, handler.Participar)
 
 		// Admin endpoints
 		rifas.GET("", middleware.RequirePermission(db, "/rifas", "VIEW"), handler.GetAll)

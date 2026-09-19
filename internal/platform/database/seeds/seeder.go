@@ -36,6 +36,10 @@ func Seed(db *gorm.DB) {
 		log.Printf("❌ Failed to seed benefits: %v", err)
 		return
 	}
+	if err := SeedConfiguracion(db); err != nil {
+		log.Printf("❌ Failed to seed configuracion: %v", err)
+		return
+	}
 
 	// Reset sequences in Postgres for manually inserted IDs
 	db.Exec("SELECT setval(pg_get_serial_sequence('administrative.roles', 'id'), COALESCE((SELECT MAX(id) FROM administrative.roles), 1))")

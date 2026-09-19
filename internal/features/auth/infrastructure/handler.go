@@ -181,3 +181,24 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, userDomain.ToUserResponse(user))
 }
 
+// ValidarCodigoEmpresa handles GET /api/auth/validar-codigo-empresa/:codigo (public)
+func (h *AuthHandler) ValidarCodigoEmpresa(c *gin.Context) {
+	codigo := c.Param("codigo")
+	if codigo == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "código de empresa requerido"})
+		return
+	}
+
+	company, err := h.service.ValidarCodigoEmpresa(codigo)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":             company.ID,
+		"name":           company.Name,
+		"codigo_empresa": company.CodigoEmpresa,
+	})
+}
+

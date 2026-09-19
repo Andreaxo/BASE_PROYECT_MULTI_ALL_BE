@@ -16,6 +16,8 @@ import (
 	categoryDomain "multicliente-backend/internal/features/category/domain"
 	"multicliente-backend/internal/features/company"
 	companyDomain "multicliente-backend/internal/features/company/domain"
+	"multicliente-backend/internal/features/membresia"
+	membresiaDomain "multicliente-backend/internal/features/membresia/domain"
 	"multicliente-backend/internal/features/menu"
 	menuDomain "multicliente-backend/internal/features/menu/domain"
 	"multicliente-backend/internal/features/referido"
@@ -45,13 +47,6 @@ func main() {
 	}
 	log.Println("✅ Database connected successfully")
 
-	// // Run auto-migrations in order of dependency
-	// // Note: Drop legacy UUID columns if they exist in administrative.users, as PostgreSQL cannot alter UUID to bigint directly
-	// _ = db.Exec("ALTER TABLE administrative.users DROP COLUMN IF EXISTS create_by")
-	// _ = db.Exec("ALTER TABLE administrative.users DROP COLUMN IF EXISTS update_by")
-	// // Safety: drop leftover constraints that GORM may try to manage but don't exist in DB yet
-	// _ = db.Exec(`ALTER TABLE "administrative"."companies" DROP CONSTRAINT IF EXISTS "uni_companies_nit"`)
-
 	err = migrations.Migrate(db,
 		&companyDomain.Company{},
 		&benefitDomain.Benefit{},
@@ -63,6 +58,9 @@ func main() {
 		&menuDomain.Menu{},
 		&userDomain.User{},
 		&referidoDomain.Referido{},
+		&membresiaDomain.Membresia{},
+		&membresiaDomain.PagoMembresia{},
+		&membresiaDomain.Configuracion{},
 	)
 	if err != nil {
 		log.Fatalf("❌ Failed to run migrations: %v", err)
@@ -89,8 +87,8 @@ func main() {
 	// Register features
 	userRepo := user.RegisterRoutes(protected, db)
 	referidoSvc := referido.RegisterRoutes(protected, db)
-	auth.RegisterRoutes(api, userRepo, referidoSvc, cfg.JWTSecret, cfg.JWTExpirationHours)
-	company.RegisterRoutes(protected, db, superAdminRequired)
+	companyRepo := company.RegisterRoutes(protected, db, superAdminRequired)
+	auth.RegisterRoutes(api, userRepo, referidoSvc, companyRepo, db, cfg.JWTSecret, cfg.JWTExpirationHours)
 	role.RegisterRoutes(protected, db, superAdminRequired)
 	menu.RegisterRoutes(protected, db, superAdminRequired)
 	benefit.RegisterRoutes(protected, db, requireCompanyAccess)
@@ -99,6 +97,21 @@ func main() {
 	rifa.RegisterRoutes(protected, db)
 	benefit_redemption.RegisterRoutes(protected, db)
 	upload.RegisterRoutes(protected)
+
+	// Register membership and payments (Wompi)
+	membresiaSvc := membresia.RegisterRoutes(
+		protected,
+		api,
+		db,
+		userRepo,
+		cfg.WompiPublicKey,
+		cfg.WompiPrivateKey,
+		cfg.WompiEventsSecret,
+		cfg.WompiSandbox,
+	)
+
+	// Start background cron jobs (trial expiration & auto-renewals)
+	membresia.StartDailyCronJobs(db, membresiaSvc)
 
 	// Health check (public)
 	api.GET("/health", func(c *gin.Context) {

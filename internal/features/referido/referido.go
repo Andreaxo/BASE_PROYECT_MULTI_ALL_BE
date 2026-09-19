@@ -17,11 +17,13 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB) domain.ReferidoService
 	service := application.NewReferidoService(repo)
 	handler := infrastructure.NewReferidoHandler(service)
 
+	requireMembresia := middleware.RequireMembresiaActiva(db)
+
 	referidos := router.Group("/referidos")
 	{
-		// Any authenticated user can create a referral and see their own
-		referidos.POST("", handler.Create)
-		referidos.GET("/mis-referidos", handler.GetMisReferidos)
+		// Authenticated user endpoints (gated by active membership for affiliates)
+		referidos.POST("", requireMembresia, handler.Create)
+		referidos.GET("/mis-referidos", requireMembresia, handler.GetMisReferidos)
 
 		// Admin-only endpoints
 		referidos.GET("", middleware.RequirePermission(db, "/referidos", "VIEW"), handler.GetAll)

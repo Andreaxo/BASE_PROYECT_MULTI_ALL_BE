@@ -37,9 +37,17 @@ var translations = map[string]map[string]string{
 		"company_header_required":    "El encabezado X-Company-ID es requerido",
 		"invalid_company_header":     "Formato de X-Company-ID inválido",
 		"failed_verify_company":      "Error al verificar los permisos de la empresa",
-		"duplicate_entry":            "Ya existe un registro con esos datos",
-		"record_not_found":           "El registro solicitado no existe",
-		"field_required":             "Uno o más campos obligatorios están vacíos",
+		"duplicate_entry":            "Ya existe un registro con esos datos en el sistema.",
+		"record_not_found":           "El registro solicitado no existe.",
+		"field_required":             "Uno o más campos obligatorios están vacíos.",
+		"business_subscription_expired": "La suscripción de tu empresa se encuentra inactiva o vencida. Para crear nuevos beneficios y publicar promociones, por favor activa tu suscripción comunicándote con el administrador de Conexiate.",
+		"membership_not_active":         "Membresía inactiva. Activa tu membresía mensual Conexiate para disfrutar de los beneficios y descuentos de comercios aliados.",
+		"company_nit_duplicate":         "Ya existe una empresa registrada con este NIT.",
+		"company_razon_social_duplicate": "Ya existe una empresa registrada con esta razón social.",
+		"company_name_duplicate":         "Ya existe una empresa registrada con este nombre comercial.",
+		"email_duplicate":                "El correo electrónico ya se encuentra registrado en la plataforma.",
+		"company_has_active_benefits":    "No es posible eliminar la empresa porque tiene beneficios activos asociados. Debe desactivarlos o eliminarlos primero.",
+		"company_has_active_users":       "No es posible eliminar la empresa porque tiene validadores de negocio o usuarios activos asociados. Debe desactivarlos o reasignarlos primero.",
 	},
 	"en": {
 		"email_required":             "Email is required",
@@ -68,9 +76,17 @@ var translations = map[string]map[string]string{
 		"company_header_required":    "X-Company-ID header is required",
 		"invalid_company_header":     "Invalid X-Company-ID format",
 		"failed_verify_company":      "Failed to verify company permissions",
-		"duplicate_entry":            "An entry with these details already exists",
-		"record_not_found":           "The requested record does not exist",
-		"field_required":             "One or more required fields are empty",
+		"duplicate_entry":            "An entry with these details already exists.",
+		"record_not_found":           "The requested record does not exist.",
+		"field_required":             "One or more required fields are empty.",
+		"business_subscription_expired": "Your company subscription is inactive or expired. To create new benefits, please activate your subscription by contacting the administrator.",
+		"membership_not_active":         "Inactive membership. Please activate your monthly Conexiate membership to access all benefits and discounts from allied businesses.",
+		"company_nit_duplicate":         "A company is already registered with this NIT.",
+		"company_razon_social_duplicate": "A company is already registered with this business name (razón social).",
+		"company_name_duplicate":         "A company is already registered with this commercial name.",
+		"email_duplicate":                "This email address is already registered on the platform.",
+		"company_has_active_benefits":    "Cannot delete company because it has active benefits associated. Please deactivate or delete them first.",
+		"company_has_active_users":       "Cannot delete company because it has active business validators or users associated. Please deactivate or reassign them first.",
 	},
 	"fr": {
 		"email_required":             "L'adresse e-mail est requise",
@@ -174,6 +190,10 @@ func TranslateError(c *gin.Context, err error) string {
 		return T(c, "no_file_uploaded", "No se ha subido ningún archivo")
 	case "Failed to save file":
 		return T(c, "failed_save_file", "Error al guardar el archivo")
+	case "business_subscription_expired", "business subscription is expired. Contact your administrator":
+		return T(c, "business_subscription_expired", "La suscripción de tu empresa se encuentra inactiva o vencida. Para crear nuevos beneficios y publicar promociones, por favor activa tu suscripción comunicándote con el administrador de Conexiate.")
+	case "membership_not_active", "membership is not active. Please activate your membership to access this feature":
+		return T(c, "membership_not_active", "Membresía inactiva. Activa tu membresía mensual Conexiate para disfrutar de los beneficios y descuentos de comercios aliados.")
 	case "invalid company ID":
 		return T(c, "invalid_company_id", "ID de empresa inválido")
 	case "invalid user ID":
@@ -201,17 +221,29 @@ func TranslateError(c *gin.Context, err error) string {
 	}
 
 	lower := strings.ToLower(msg)
-	if strings.Contains(lower, "duplicate key") || strings.Contains(lower, "unique constraint") || strings.Contains(lower, "1062") {
-		return T(c, "duplicate_entry", "Ya existe un registro con esos datos")
+	if strings.Contains(lower, "duplicate key") || strings.Contains(lower, "unique constraint") || strings.Contains(lower, "23505") || strings.Contains(lower, "1062") {
+		if strings.Contains(lower, "nit") {
+			return T(c, "company_nit_duplicate", "Ya existe una empresa registrada con este NIT.")
+		}
+		if strings.Contains(lower, "razon_social") {
+			return T(c, "company_razon_social_duplicate", "Ya existe una empresa registrada con esta razón social.")
+		}
+		if strings.Contains(lower, "name") || strings.Contains(lower, "companies") {
+			return T(c, "company_name_duplicate", "Ya existe una empresa registrada con este nombre comercial.")
+		}
+		if strings.Contains(lower, "email") || strings.Contains(lower, "users_email") {
+			return T(c, "email_duplicate", "El correo electrónico ya se encuentra registrado en la plataforma.")
+		}
+		return T(c, "duplicate_entry", "Ya existe un registro con esos datos en el sistema.")
 	}
 	if strings.Contains(lower, "record not found") {
-		return T(c, "record_not_found", "El registro solicitado no existe")
+		return T(c, "record_not_found", "El registro solicitado no existe.")
 	}
 	if strings.Contains(lower, "required") {
-		return T(c, "field_required", "Uno o más campos obligatorios están vacíos")
+		return T(c, "field_required", "Uno o más campos obligatorios están vacíos.")
 	}
 	if strings.Contains(lower, "email") {
-		return T(c, "invalid_email", "Ingrese un correo electrónico válido")
+		return T(c, "invalid_email", "Ingrese un correo electrónico válido.")
 	}
 
 	return msg

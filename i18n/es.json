@@ -25,7 +25,15 @@
   "company_header_required": "El encabezado X-Company-ID es requerido",
   "invalid_company_header": "Formato de X-Company-ID inválido",
   "failed_verify_company": "Error al verificar los permisos de la empresa",
-  "duplicate_entry": "Ya existe un registro con esos datos",
-  "record_not_found": "El registro solicitado no existe",
-  "field_required": "Uno o más campos obligatorios están vacíos"
+  "duplicate_entry": "Ya existe un registro con esos datos en el sistema.",
+  "record_not_found": "El registro solicitado no existe.",
+  "field_required": "Uno o más campos obligatorios están vacíos.",
+  "business_subscription_expired": "La suscripción de tu empresa se encuentra inactiva o vencida. Para crear nuevos beneficios y publicar promociones, por favor activa tu suscripción comunicándote con el administrador de Conexiate.",
+  "membership_not_active": "Membresía inactiva. Activa tu membresía mensual Conexiate para disfrutar de los beneficios y descuentos de comercios aliados.",
+  "company_nit_duplicate": "Ya existe una empresa registrada con este NIT.",
+  "company_razon_social_duplicate": "Ya existe una empresa registrada con esta razón social.",
+  "company_name_duplicate": "Ya existe una empresa registrada con este nombre comercial.",
+  "email_duplicate": "El correo electrónico ya se encuentra registrado en la plataforma.",
+  "company_has_active_benefits": "No es posible eliminar la empresa porque tiene beneficios activos asociados. Debe desactivarlos o eliminarlos primero.",
+  "company_has_active_users": "No es posible eliminar la empresa porque tiene validadores de negocio o usuarios activos asociados. Debe desactivarlos o reasignarlos primero."
 }

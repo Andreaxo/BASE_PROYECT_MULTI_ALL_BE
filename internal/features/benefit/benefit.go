@@ -15,15 +15,18 @@ func RegisterRoutes(router *gin.RouterGroup, db *gorm.DB, requireRole gin.Handle
 	service := application.NewBenefitService(repo)
 	handler := infrastructure.NewBenefitHandler(service, db)
 
+	requireMembresia := middleware.RequireMembresiaActiva(db)
+	requireSuscripcion := middleware.RequireSuscripcionActiva(db)
+
 	Benefit := router.Group("/benefit")
 	{
-		// Authenticated user views
-		Benefit.GET("", handler.GetAll)
+		// Authenticated user views (gated for affiliates)
+		Benefit.GET("", requireMembresia, handler.GetAll)
 		Benefit.GET("/my-company", handler.GetMyCompanyBenefits)
-		Benefit.GET("/:id", handler.GetBenefitByID)
+		Benefit.GET("/:id", requireMembresia, handler.GetBenefitByID)
 
-		// Create/Edit/Delete operations (protected by permission & empresa_id validation)
-		Benefit.POST("", middleware.RequirePermission(db, "/benefit", "CREATE"), handler.Create)
+		// Create/Edit/Delete operations (protected by permission, business subscription & empresa_id validation)
+		Benefit.POST("", requireSuscripcion, middleware.RequirePermission(db, "/benefit", "CREATE"), handler.Create)
 		Benefit.PUT("/:id", middleware.RequirePermission(db, "/benefit", "EDIT"), handler.Update)
 		Benefit.DELETE("/:id", middleware.RequirePermission(db, "/benefit", "DELETE"), handler.Delete)
 	}

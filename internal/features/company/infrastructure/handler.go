@@ -96,7 +96,7 @@ func (h *CompanyHandler) Delete(c *gin.Context) {
 	id := uint(idVal)
 
 	if err := h.service.DeleteCompany(id); err != nil {
-		i18n.Error(c, http.StatusInternalServerError, err)
+		i18n.Error(c, http.StatusBadRequest, err)
 		return
 	}
 

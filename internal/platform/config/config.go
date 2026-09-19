@@ -19,12 +19,20 @@ type Config struct {
 	JWTExpirationHours string
 
 	ServerPort string
+
+	// Wompi payment gateway
+	WompiPublicKey    string
+	WompiPrivateKey   string
+	WompiEventsSecret string
+	WompiSandbox      bool
 }
 
 // Load reads the .env file and returns a Config struct with all values.
 func Load() *Config {
 	// Load .env file (ignore error if not found)
 	godotenv.Load()
+
+	sandbox := getEnv("WOMPI_SANDBOX", "true")
 
 	return &Config{
 		DBHost:     getEnv("DB_HOST", "localhost"),
@@ -38,6 +46,11 @@ func Load() *Config {
 		JWTExpirationHours: getEnv("JWT_EXPIRATION_HOURS", "24"),
 
 		ServerPort: getEnv("SERVER_PORT", "8080"),
+
+		WompiPublicKey:    getEnv("WOMPI_PUBLIC_KEY", ""),
+		WompiPrivateKey:   getEnv("WOMPI_PRIVATE_KEY", ""),
+		WompiEventsSecret: getEnv("WOMPI_EVENTS_SECRET", ""),
+		WompiSandbox:      sandbox == "true" || sandbox == "1",
 	}
 }
 

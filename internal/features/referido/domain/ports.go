@@ -7,6 +7,7 @@ type ReferidoRepository interface {
 	FindByReferenteID(referenteID uint) ([]Referido, error)
 	FindByEmail(email string) (*Referido, error)
 	FindPendingByEmail(email string) (*Referido, error)
+	FindRegistradoByUsuarioID(usuarioReferidoID uint) (*Referido, error)
 	FindAll() ([]Referido, error)
 	Update(referido *Referido) error
 	Delete(id uint) error

@@ -97,3 +97,14 @@ func (r *referidoRepository) FindPendingRewards() ([]domain.Referido, error) {
 	}
 	return referidos, nil
 }
+
+func (r *referidoRepository) FindRegistradoByUsuarioID(usuarioReferidoID uint) (*domain.Referido, error) {
+	var referido domain.Referido
+	if err := r.db.
+		Preload("Referente").
+		Preload("Referido_").
+		First(&referido, "usuario_referido_id = ? AND estado = ?", usuarioReferidoID, domain.EstadoRegistrado).Error; err != nil {
+		return nil, err
+	}
+	return &referido, nil
+}

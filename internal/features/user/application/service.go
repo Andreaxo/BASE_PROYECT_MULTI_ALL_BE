@@ -1,13 +1,29 @@
 package application
 
 import (
+	"crypto/rand"
 	"errors"
+	"math/big"
 
 	"golang.org/x/crypto/bcrypt"
 
 	companyDomain "multicliente-backend/internal/features/company/domain"
 	"multicliente-backend/internal/features/user/domain"
 )
+
+func generateUserCodeRefer() string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	const length = 8
+	code := make([]byte, length)
+	for i := range code {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		if err != nil {
+			return "USER1234"
+		}
+		code[i] = charset[n.Int64()]
+	}
+	return string(code)
+}
 
 type userService struct {
 	repo domain.UserRepository
@@ -36,6 +52,8 @@ func (s *userService) CreateUser(req *domain.CreateUserRequest, createdBy *uint)
 		companies[i] = companyDomain.Company{ID: cid}
 	}
 
+	codeRefer := generateUserCodeRefer()
+
 	user := &domain.User{
 		Email:     req.Email,
 		Password:  string(hashedPassword),
@@ -45,6 +63,7 @@ func (s *userService) CreateUser(req *domain.CreateUserRequest, createdBy *uint)
 		CreateBy:  createdBy,
 		RoleID:    req.RoleID,
 		Companies: companies,
+		CodeRefer: codeRefer,
 	}
 
 	if err := s.repo.Create(user); err != nil {

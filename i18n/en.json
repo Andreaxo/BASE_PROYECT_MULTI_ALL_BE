@@ -25,7 +25,15 @@
   "company_header_required": "X-Company-ID header is required",
   "invalid_company_header": "Invalid X-Company-ID format",
   "failed_verify_company": "Failed to verify company permissions",
-  "duplicate_entry": "An entry with these details already exists",
-  "record_not_found": "The requested record does not exist",
-  "field_required": "One or more required fields are empty"
+  "duplicate_entry": "An entry with these details already exists.",
+  "record_not_found": "The requested record does not exist.",
+  "field_required": "One or more required fields are empty.",
+  "business_subscription_expired": "Your company subscription is inactive or expired. To create new benefits, please activate your subscription by contacting the administrator.",
+  "membership_not_active": "Inactive membership. Please activate your monthly Conexiate membership to enjoy partner merchant benefits and discounts.",
+  "company_nit_duplicate": "A company is already registered with this NIT.",
+  "company_razon_social_duplicate": "A company is already registered with this business name (razón social).",
+  "company_name_duplicate": "A company is already registered with this commercial name.",
+  "email_duplicate": "This email address is already registered on the platform.",
+  "company_has_active_benefits": "Cannot delete company because it has active benefits associated. Please deactivate or delete them first.",
+  "company_has_active_users": "Cannot delete company because it has active business validators or users associated. Please deactivate or reassign them first."
 }

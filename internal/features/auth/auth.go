@@ -2,24 +2,28 @@ package auth
 
 import (
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"multicliente-backend/internal/features/auth/application"
 	"multicliente-backend/internal/features/auth/infrastructure"
+	companyDomain "multicliente-backend/internal/features/company/domain"
 	referidoDomain "multicliente-backend/internal/features/referido/domain"
 	userDomain "multicliente-backend/internal/features/user/domain"
 	"multicliente-backend/internal/platform/middleware"
 )
 
 // RegisterRoutes wires up the auth feature and registers its routes.
-// It receives the user repository and referido service as cross-feature dependencies.
+// It receives the user repository, referido service, company repository, and db as cross-feature dependencies.
 func RegisterRoutes(
 	router *gin.RouterGroup,
 	userRepo userDomain.UserRepository,
 	referidoSvc referidoDomain.ReferidoService,
+	companyRepo companyDomain.CompanyRepository,
+	db *gorm.DB,
 	jwtSecret string,
 	jwtExpHours string,
 ) {
-	service := application.NewAuthService(userRepo, referidoSvc, jwtSecret, jwtExpHours)
+	service := application.NewAuthService(userRepo, referidoSvc, companyRepo, db, jwtSecret, jwtExpHours)
 	handler := infrastructure.NewAuthHandler(service)
 
 	authGroup := router.Group("/auth")
@@ -27,6 +31,7 @@ func RegisterRoutes(
 		// Public endpoints (no JWT required)
 		authGroup.POST("/login", handler.Login)
 		authGroup.POST("/register", handler.Register)
+		authGroup.GET("/validar-codigo-empresa/:codigo", handler.ValidarCodigoEmpresa)
 
 		// Protected endpoints (JWT required)
 		authGroup.GET("/profile", middleware.JWTAuth(jwtSecret), handler.GetProfile)
