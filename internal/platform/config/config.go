@@ -44,14 +44,19 @@ func Load() *Config {
 
 	sandbox := getEnv("WOMPI_SANDBOX", "true")
 
+	dbHost := getEnv("DB_HOST", "localhost")
+	if (dbHost == "localhost" || dbHost == "127.0.0.1" || dbHost == "") && os.Getenv("GIN_MODE") == "release" {
+		dbHost = "database-conexiate-fh0ivs"
+	}
+
 	return &Config{
 		DatabaseURL: getEnv("DATABASE_URL", ""),
-		DBHost:      getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "5432"),
-		DBUser:     getEnv("DB_USER", "postgres"),
-		DBPassword: getEnv("DB_PASSWORD", ""),
-		DBName:     getEnv("DB_NAME", "conexiate_db"),
-		DBSSLMode:  getEnv("DB_SSLMODE", "disable"),
+		DBHost:      dbHost,
+		DBPort:      getEnv("DB_PORT", "5432"),
+		DBUser:      getEnv("DB_USER", "postgres"),
+		DBPassword:  getEnv("DB_PASSWORD", ""),
+		DBName:      getEnv("DB_NAME", "Proyect_base"),
+		DBSSLMode:   getEnv("DB_SSLMODE", "disable"),
 
 		JWTSecret:          getEnv("JWT_SECRET", "your-super-secret-key-change-me-in-production"),
 		JWTExpirationHours: getEnv("JWT_EXPIRATION_HOURS", "24"),

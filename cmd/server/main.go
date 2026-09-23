@@ -50,6 +50,15 @@ func main() {
 		} else {
 			log.Printf("⚠️ DB_HOST is NOT set in container environment! Using fallback: '%s'", cfg.DBHost)
 		}
+		passPreview := "EMPTY"
+		if len(cfg.DBPassword) > 0 {
+			previewLen := 3
+			if len(cfg.DBPassword) < 3 {
+				previewLen = len(cfg.DBPassword)
+			}
+			passPreview = cfg.DBPassword[:previewLen] + "***"
+		}
+		log.Printf("🔑 DB_PASSWORD detected: '%s' (length: %d)", passPreview, len(cfg.DBPassword))
 		log.Printf("🔌 Connecting to PostgreSQL at %s:%s (database: '%s', user: '%s', sslmode: '%s')...",
 			cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, cfg.DBSSLMode)
 	}
