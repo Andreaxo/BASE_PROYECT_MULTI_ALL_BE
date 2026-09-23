@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/gin-gonic/gin"
 
@@ -44,6 +45,11 @@ func main() {
 	if cfg.DatabaseURL != "" {
 		log.Println("🔌 Connecting to PostgreSQL using DATABASE_URL...")
 	} else {
+		if rawHost, exists := os.LookupEnv("DB_HOST"); exists {
+			log.Printf("🔎 Container env DB_HOST detected: '%s'", rawHost)
+		} else {
+			log.Printf("⚠️ DB_HOST is NOT set in container environment! Using fallback: '%s'", cfg.DBHost)
+		}
 		log.Printf("🔌 Connecting to PostgreSQL at %s:%s (database: '%s', user: '%s', sslmode: '%s')...",
 			cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, cfg.DBSSLMode)
 	}
