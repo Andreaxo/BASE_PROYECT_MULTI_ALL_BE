@@ -84,6 +84,30 @@ func SeedUsers(db *gorm.DB) error {
 		}
 	}
 
+	// Seed demo Operador user for testing if not present
+	var operadorCount int64
+	db.Model(&userDomain.User{}).Where("email = ?", "operador@conexiate.com").Count(&operadorCount)
+	if operadorCount == 0 {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte("Operador123*"), bcrypt.DefaultCost)
+		if err == nil {
+			operadorRoleID := uint(8)
+			operadorUser := &userDomain.User{
+				Email:     "operador@conexiate.com",
+				Password:  string(hashedPassword),
+				FirstName: "Operador",
+				LastName:  "Atención",
+				IsActive:  true,
+				RoleID:    &operadorRoleID,
+				Companies: []companyDomain.Company{{ID: 1}},
+				CodeRefer: "OPERADOR",
+			}
+			if err := db.Create(operadorUser).Error; err == nil {
+				db.Exec("UPDATE administrative.users SET empresa_id = 1 WHERE id = ?", operadorUser.ID)
+				log.Println("✅ Demo Operador user seeded successfully (operador@conexiate.com / Operador123*)")
+			}
+		}
+	}
+
 	// Backfill missing code_refer and empresa_id for existing users
 	var emptyUsers []userDomain.User
 	if err := db.Where("code_refer IS NULL OR code_refer = ''").Find(&emptyUsers).Error; err == nil {

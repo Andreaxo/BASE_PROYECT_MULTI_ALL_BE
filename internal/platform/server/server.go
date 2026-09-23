@@ -13,6 +13,8 @@ func NewRouter() *gin.Engine {
 	// Apply global middlewares
 	router.Use(middleware.CORS())
 	router.Use(middleware.Translation())
+	// Security: block SQL injection patterns on every request
+	router.Use(middleware.SQLInjectionGuard())
 
 	// Serve uploaded profile and company images
 	router.Static("/uploads", "./uploads")

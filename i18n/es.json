@@ -1,8 +1,8 @@
 {
-  "email_required": "El correo electrónico es requerido",
-  "invalid_email": "Ingrese un correo válido",
-  "password_required": "La contraseña es requerida",
-  "invalid_credentials": "Credenciales inválidas",
+  "email_required": "Por favor ingresa tu correo electrónico.",
+  "invalid_email": "Ingresa un formato de correo electrónico válido.",
+  "password_required": "Por favor ingresa tu contraseña.",
+  "invalid_credentials": "El correo electrónico o la contraseña son incorrectos.",
   "invalid_user_id": "ID de usuario inválido",
   "user_not_found": "Usuario no encontrado",
   "invalid_company_id": "ID de empresa inválido",
@@ -35,5 +35,7 @@
   "company_name_duplicate": "Ya existe una empresa registrada con este nombre comercial.",
   "email_duplicate": "El correo electrónico ya se encuentra registrado en la plataforma.",
   "company_has_active_benefits": "No es posible eliminar la empresa porque tiene beneficios activos asociados. Debe desactivarlos o eliminarlos primero.",
-  "company_has_active_users": "No es posible eliminar la empresa porque tiene validadores de negocio o usuarios activos asociados. Debe desactivarlos o reasignarlos primero."
+  "company_has_active_users": "No es posible eliminar la empresa porque tiene validadores de negocio o usuarios activos asociados. Debe desactivarlos o reasignarlos primero.",
+  "user_inactive": "Tu cuenta se encuentra inactiva. Por favor, revisa tu correo de activación o contacta al administrador.",
+  "user_not_found_email": "No existe ningún usuario registrado con este correo electrónico."
 }

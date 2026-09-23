@@ -14,5 +14,9 @@ type AuthService interface {
 	ChangePassword(userID uint, req *ChangePasswordRequest) error
 	UpdateProfile(userID uint, req *UpdateProfileRequest) (*userDomain.User, error)
 	ValidarCodigoEmpresa(codigo string) (*companyDomain.Company, error)
+	OlvidePassword(req *OlvidePasswordRequest) error
+	VerificarCodigo(req *VerificarCodigoRequest) (*VerificarCodigoResponse, error)
+	ResetPassword(req *ResetPasswordRequest) error
+	RegistroAsistido(req *RegistroAsistidoRequest, operadorID uint) (*RegistroAsistidoResponse, error)
 }
 

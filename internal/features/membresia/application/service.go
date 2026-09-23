@@ -13,17 +13,19 @@ import (
 
 	membresiaDomain "multicliente-backend/internal/features/membresia/domain"
 	"multicliente-backend/internal/features/membresia/infrastructure"
+	notificacionDomain "multicliente-backend/internal/features/notificacion/domain"
 	referidoDomain "multicliente-backend/internal/features/referido/domain"
 	userDomain "multicliente-backend/internal/features/user/domain"
 )
 
 type membresiaService struct {
-	db          *gorm.DB
-	membRepo    membresiaDomain.MembresiaRepository
-	pagoRepo    membresiaDomain.PagoMembresiaRepository
-	referidoRepo referidoDomain.ReferidoRepository
-	userRepo    userDomain.UserRepository
-	wompi       *infrastructure.WompiClient
+	db           *gorm.DB
+	membRepo     membresiaDomain.MembresiaRepository
+	pagoRepo     membresiaDomain.PagoMembresiaRepository
+	referidoRepo  referidoDomain.ReferidoRepository
+	userRepo     userDomain.UserRepository
+	wompi        *infrastructure.WompiClient
+	notifSvc     notificacionDomain.NotificacionService
 }
 
 // NewMembresiaService creates a new MembresiaService with all dependencies.
@@ -34,14 +36,16 @@ func NewMembresiaService(
 	referidoRepo referidoDomain.ReferidoRepository,
 	userRepo userDomain.UserRepository,
 	wompi *infrastructure.WompiClient,
+	notifSvc notificacionDomain.NotificacionService,
 ) membresiaDomain.MembresiaService {
 	return &membresiaService{
 		db:           db,
 		membRepo:     membRepo,
 		pagoRepo:     pagoRepo,
-		referidoRepo: referidoRepo,
+		referidoRepo:  referidoRepo,
 		userRepo:     userRepo,
 		wompi:        wompi,
+		notifSvc:     notifSvc,
 	}
 }
 
@@ -77,8 +81,8 @@ func (s *membresiaService) IniciarPago(usuarioID uint, req *membresiaDomain.Inic
 
 	if user.Role != nil {
 		roleCode := strings.ToLower(strings.TrimSpace(user.Role.Code))
-		if roleCode == "superadmin" || roleCode == "admin" || roleCode == "super_admin" {
-			return nil, errors.New("el usuario administrador cuenta con acceso vitalicio y no requiere pago de afiliación")
+		if roleCode == "superadmin" || roleCode == "admin" || roleCode == "super_admin" || roleCode == "operador" {
+			return nil, errors.New("el usuario cuenta con acceso administrativo/vitalicio y no requiere pago de afiliación")
 		}
 	}
 
@@ -103,7 +107,7 @@ func (s *membresiaService) IniciarPago(usuarioID uint, req *membresiaDomain.Inic
 		Monto:              float64(precio),
 		Moneda:             "COP",
 		Tipo:               membresiaDomain.PagoTipoInicial, // Will be corrected in webhook
-		ReferenciaPasarela: &txResp.Data.ID,
+		ReferenciaPasarela: &referencia,
 		Estado:             membresiaDomain.PagoEstadoPendiente,
 	}
 	if err := s.pagoRepo.Create(pago); err != nil {
@@ -136,18 +140,37 @@ func (s *membresiaService) ProcessWebhook(body []byte, signature string) error {
 	}
 
 	txID := event.Data.Transaction.ID
+	txRef := event.Data.Transaction.Reference
 	txStatus := event.Data.Transaction.Status
+	pmToken := event.Data.Transaction.PaymentMethod.Token
 
-	// 4. Deduplication: check if we already processed this transaction
+	return s.applyTransactionResult(txID, txRef, txStatus, pmToken)
+}
+
+// applyTransactionResult applies transaction confirmation from Wompi (via webhook or polling sync).
+func (s *membresiaService) applyTransactionResult(txID, txRef, txStatus, pmToken string) error {
+	// 4. Deduplication / lookup:
+	// First check if already processed with this gateway transaction ID
 	existingPago, _ := s.pagoRepo.FindByReferencia(txID)
-	if existingPago != nil && existingPago.Estado == membresiaDomain.PagoEstadoAprobado {
-		// Already processed — idempotent, ignore
-		return nil
+	if existingPago != nil {
+		if txStatus == "APPROVED" && existingPago.Estado == membresiaDomain.PagoEstadoAprobado {
+			log.Printf("ℹ️ [Idempotency] Transaction %s already processed as APPROVED. Skipping duplicate.", txID)
+			return nil
+		}
+		if (txStatus == "DECLINED" || txStatus == "ERROR") && existingPago.Estado == membresiaDomain.PagoEstadoRechazado {
+			log.Printf("ℹ️ [Idempotency] Transaction %s already processed as DECLINED. Skipping duplicate.", txID)
+			return nil
+		}
+	}
+
+	// If not found by gateway txID, look up by our merchant reference (e.g. MEMB-...)
+	if existingPago == nil && txRef != "" {
+		existingPago, _ = s.pagoRepo.FindByReferencia(txRef)
 	}
 
 	// 5. Find the pending payment by reference
 	if existingPago == nil {
-		return fmt.Errorf("no se encontró pago pendiente con referencia: %s", txID)
+		return fmt.Errorf("no se encontró pago pendiente con referencia: %s (ref: %s)", txID, txRef)
 	}
 
 	// 6. Process in a DB transaction
@@ -178,9 +201,17 @@ func (s *membresiaService) ProcessWebhook(body []byte, signature string) error {
 		if txStatus == "APPROVED" {
 			// Approved
 			pago.Estado = membresiaDomain.PagoEstadoAprobado
+			if txID != "" {
+				pago.ReferenciaPasarela = &txID
+			}
 			if err := tx.Save(&pago).Error; err != nil {
 				return err
 			}
+
+			// Clean up other lingering pending payment attempts for this membership
+			tx.Model(&membresiaDomain.PagoMembresia{}).
+				Where("membresia_id = ? AND id != ? AND estado = ?", membresia.ID, pago.ID, membresiaDomain.PagoEstadoPendiente).
+				Update("estado", membresiaDomain.PagoEstadoRechazado)
 
 			// Activate membership
 			now := time.Now()
@@ -190,7 +221,6 @@ func (s *membresiaService) ProcessWebhook(body []byte, signature string) error {
 			membresia.FechaFin = &nextMonth
 
 			// Save payment method token if present
-			pmToken := event.Data.Transaction.PaymentMethod.Token
 			if pmToken != "" {
 				membresia.MetodoPagoToken = &pmToken
 			}
@@ -213,11 +243,51 @@ func (s *membresiaService) ProcessWebhook(body []byte, signature string) error {
 					SELECT empresa_id FROM administrative.users WHERE id = ? AND empresa_id IS NOT NULL
 				)
 			`, membresia.UsuarioID, membresia.UsuarioID)
+
+			// Notificar a superadministradores sobre el pago aprobado
+			user, _ := s.userRepo.FindByID(membresia.UsuarioID)
+			nombre := "Usuario"
+			email := ""
+			if user != nil {
+				nombre = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
+				email = user.Email
+			}
+			refPasarela := ""
+			if pago.ReferenciaPasarela != nil {
+				refPasarela = *pago.ReferenciaPasarela
+			}
+			titulo := fmt.Sprintf("Pago de membresía aprobado - %s", nombre)
+			mensaje := fmt.Sprintf("El usuario %s (%s) realizó con éxito el pago de membresía por $%.0f COP (Ref: %s).", nombre, email, pago.Monto, refPasarela)
+			if s.notifSvc != nil {
+				_ = s.notifSvc.NotificarPagoSuperadmins(titulo, mensaje, notificacionDomain.TipoPagoAprobado, pago.ID, "pago_membresia")
+			}
 		} else if txStatus == "DECLINED" || txStatus == "ERROR" || txStatus == "VOIDED" {
+			// Safeguard: Never downgrade an already approved payment to rejected
+			if pago.Estado == membresiaDomain.PagoEstadoAprobado {
+				log.Printf("⚠️ [Anomaly] Received status %s for already APPROVED payment ID %d. Ignoring transition.", txStatus, pago.ID)
+				return nil
+			}
 			// Rejected
 			pago.Estado = membresiaDomain.PagoEstadoRechazado
+			if txID != "" {
+				pago.ReferenciaPasarela = &txID
+			}
 			if err := tx.Save(&pago).Error; err != nil {
 				return err
+			}
+
+			// Notificar a superadministradores sobre el pago rechazado
+			user, _ := s.userRepo.FindByID(membresia.UsuarioID)
+			nombre := "Usuario"
+			email := ""
+			if user != nil {
+				nombre = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
+				email = user.Email
+			}
+			titulo := fmt.Sprintf("Pago de membresía rechazado - %s", nombre)
+			mensaje := fmt.Sprintf("El intento de pago de membresía para el usuario %s (%s) fue rechazado/falló por $%.0f COP.", nombre, email, pago.Monto)
+			if s.notifSvc != nil {
+				_ = s.notifSvc.NotificarPagoSuperadmins(titulo, mensaje, notificacionDomain.TipoPagoRechazado, pago.ID, "pago_membresia")
 			}
 			// Membership stays as is (inactiva if first payment, or no change)
 		}
@@ -259,10 +329,10 @@ func (s *membresiaService) triggerReferidoAfiliacion(tx *gorm.DB, usuarioID uint
 
 // GetMiMembresia returns the membership status for a user.
 func (s *membresiaService) GetMiMembresia(usuarioID uint) (*membresiaDomain.MembresiaResponse, error) {
-	// 0. Si es superadmin o admin, siempre tiene membresía activa vitalicia
+	// 0. Si es superadmin, admin u operador, siempre tiene membresía activa vitalicia/administrativa
 	if user, err := s.userRepo.FindByID(usuarioID); err == nil && user != nil && user.Role != nil {
 		roleCode := strings.ToLower(strings.TrimSpace(user.Role.Code))
-		if roleCode == "superadmin" || roleCode == "admin" || roleCode == "super_admin" {
+		if roleCode == "superadmin" || roleCode == "admin" || roleCode == "super_admin" || roleCode == "operador" {
 			now := time.Now()
 			future := now.AddDate(100, 0, 0)
 			return &membresiaDomain.MembresiaResponse{
@@ -286,7 +356,45 @@ func (s *membresiaService) GetMiMembresia(usuarioID uint) (*membresiaDomain.Memb
 			TieneMetodoPago:      false,
 		}, nil
 	}
-	return membresiaDomain.ToMembresiaResponse(membresia), nil
+	// 1. Sincronización proactiva con Wompi: Si la membresía está inactiva, verificar pagos pendientes recientes
+	if membresia.Estado != membresiaDomain.MembresiaActiva {
+		var pendingPagos []membresiaDomain.PagoMembresia
+		twoHoursAgo := time.Now().Add(-2 * time.Hour)
+		if err := s.db.Where("membresia_id = ? AND estado = ? AND fecha_pago >= ?", membresia.ID, membresiaDomain.PagoEstadoPendiente, twoHoursAgo).
+			Order("id DESC").Find(&pendingPagos).Error; err == nil && len(pendingPagos) > 0 {
+			for _, p := range pendingPagos {
+				if p.ReferenciaPasarela == nil || *p.ReferenciaPasarela == "" {
+					continue
+				}
+				txs, err := s.wompi.GetTransactionsByReference(*p.ReferenciaPasarela)
+				if err == nil && len(txs) > 0 {
+					txItem := txs[0]
+					if txItem.Status == "APPROVED" || txItem.Status == "DECLINED" || txItem.Status == "ERROR" {
+						_ = s.applyTransactionResult(txItem.ID, txItem.Reference, txItem.Status, txItem.PaymentMethod.Token)
+						if txItem.Status == "APPROVED" {
+							if updatedMemb, err := s.membRepo.FindByID(membresia.ID); err == nil {
+								membresia = updatedMemb
+							}
+							break
+						}
+					}
+				}
+			}
+		}
+	}
+
+	resp := membresiaDomain.ToMembresiaResponse(membresia)
+	var ultimoPago membresiaDomain.PagoMembresia
+	if membresia.Estado == membresiaDomain.MembresiaActiva {
+		if err := s.db.Where("membresia_id = ? AND estado = ?", membresia.ID, membresiaDomain.PagoEstadoAprobado).Order("id DESC").First(&ultimoPago).Error; err == nil {
+			resp.UltimoPagoEstado = &ultimoPago.Estado
+		}
+	} else {
+		if err := s.db.Where("membresia_id = ?", membresia.ID).Order("id DESC").First(&ultimoPago).Error; err == nil {
+			resp.UltimoPagoEstado = &ultimoPago.Estado
+		}
+	}
+	return resp, nil
 }
 
 // CancelarRenovacion disables automatic renewal for a user's membership.
@@ -450,6 +558,20 @@ func (s *membresiaService) SimularPago(usuarioID uint, status string) (*membresi
 				SELECT empresa_id FROM administrative.users WHERE id = ? AND empresa_id IS NOT NULL
 			)
 		`, usuarioID, usuarioID)
+
+		// Notificar a superadministradores (Simulación)
+		user, _ := s.userRepo.FindByID(usuarioID)
+		nombre := "Usuario"
+		email := ""
+		if user != nil {
+			nombre = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
+			email = user.Email
+		}
+		titulo := fmt.Sprintf("Pago de membresía aprobado - %s", nombre)
+		mensaje := fmt.Sprintf("El usuario %s (%s) realizó con éxito el pago de membresía por $25.000 COP (Ref: %s).", nombre, email, referencia)
+		if s.notifSvc != nil {
+			_ = s.notifSvc.NotificarPagoSuperadmins(titulo, mensaje, notificacionDomain.TipoPagoAprobado, membresia.ID, "pago_membresia")
+		}
 	} else if status == "DECLINED" {
 		referencia := fmt.Sprintf("SIM-DECLINED-%d", time.Now().UnixMilli())
 		_ = s.pagoRepo.Create(&membresiaDomain.PagoMembresia{
@@ -460,6 +582,20 @@ func (s *membresiaService) SimularPago(usuarioID uint, status string) (*membresi
 			ReferenciaPasarela: &referencia,
 			Estado:             membresiaDomain.PagoEstadoRechazado,
 		})
+
+		// Notificar a superadministradores (Simulación)
+		user, _ := s.userRepo.FindByID(usuarioID)
+		nombre := "Usuario"
+		email := ""
+		if user != nil {
+			nombre = fmt.Sprintf("%s %s", user.FirstName, user.LastName)
+			email = user.Email
+		}
+		titulo := fmt.Sprintf("Pago de membresía rechazado - %s", nombre)
+		mensaje := fmt.Sprintf("El intento de pago de membresía para el usuario %s (%s) fue rechazado/falló por $25.000 COP (Ref: %s).", nombre, email, referencia)
+		if s.notifSvc != nil {
+			_ = s.notifSvc.NotificarPagoSuperadmins(titulo, mensaje, notificacionDomain.TipoPagoRechazado, membresia.ID, "pago_membresia")
+		}
 	}
 
 	return s.GetMiMembresia(usuarioID)

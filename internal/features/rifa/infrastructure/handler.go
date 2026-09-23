@@ -82,6 +82,13 @@ func (h *RifaHandler) GetByID(c *gin.Context) {
 
 // POST /api/rifas
 func (h *RifaHandler) Create(c *gin.Context) {
+	roleVal, _ := c.Get("role")
+	roleCode, _ := roleVal.(string)
+	if roleCode == "operador" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Los operadores no tienen permisos para crear rifas"})
+		return
+	}
+
 	var req domain.CreateRifaRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		i18n.Error(c, http.StatusBadRequest, err)

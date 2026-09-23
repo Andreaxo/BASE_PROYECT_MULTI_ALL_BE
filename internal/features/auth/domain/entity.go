@@ -26,7 +26,7 @@ type UserInfo struct {
 // RegisterRequest is the payload for the public registration endpoint.
 type RegisterRequest struct {
 	Email          string  `json:"email" binding:"required,email"`
-	Password       string  `json:"password" binding:"required,min=6"`
+	Password       string  `json:"password" binding:"required,min=10"`
 	FirstName      string  `json:"first_name" binding:"required"`
 	LastName       string  `json:"last_name" binding:"required"`
 	RefCode        *string `json:"ref_code"`
@@ -45,7 +45,7 @@ type RegisterResponse struct {
 type ChangePasswordRequest struct {
 	CurrentPassword        string `json:"current_password" binding:"required"`
 	ConfirmCurrentPassword string `json:"confirm_current_password" binding:"required"`
-	NewPassword            string `json:"new_password" binding:"required,min=6"`
+	NewPassword            string `json:"new_password" binding:"required,min=10"`
 }
 
 // UpdateProfileRequest represents the payload to update own profile details
@@ -53,5 +53,34 @@ type UpdateProfileRequest struct {
 	Email     string `json:"email" binding:"required,email"`
 	FirstName string `json:"first_name" binding:"required"`
 	LastName  string `json:"last_name" binding:"required"`
+}
+
+// OlvidePasswordRequest is the payload for requesting a password reset email.
+type OlvidePasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// ResetPasswordRequest is the payload for setting a new password with a token.
+type ResetPasswordRequest struct {
+	Token    string `json:"token" binding:"required"`
+	Password string `json:"password" binding:"required,min=10"`
+}
+
+// RegistroAsistidoRequest is the payload for operator-assisted user registration.
+type RegistroAsistidoRequest struct {
+	Email         string  `json:"email" binding:"required,email"`
+	FirstName     string  `json:"first_name" binding:"required"`
+	LastName      string  `json:"last_name" binding:"required"`
+	RefCode       *string `json:"ref_code"`
+	CodigoEmpresa *string `json:"codigo_empresa"`
+	EmpresaID     *uint   `json:"empresa_id"`
+}
+
+// RegistroAsistidoResponse is returned after assisted registration.
+type RegistroAsistidoResponse struct {
+	User            UserInfo `json:"user"`
+	ReferidoCreated bool     `json:"referido_created"`
+	EmailSent       bool     `json:"email_sent"`
+	Message         string   `json:"message"`
 }
 

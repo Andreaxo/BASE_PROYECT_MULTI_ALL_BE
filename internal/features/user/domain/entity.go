@@ -26,6 +26,9 @@ type User struct {
 	Companies    []companyDomain.Company `gorm:"many2many:administrative.user_companies;" json:"companies,omitempty"`
 	EmpresaID    uint                    `gorm:"-" json:"empresa_id"`
 	CodeRefer    string                  `gorm:"type:varchar(10);uniqueIndex" json:"code_refer"`
+	RequiereResetPassword bool           `gorm:"default:false" json:"requiere_reset_password"`
+	FailedAttempts        int            `gorm:"default:0" json:"failed_attempts"`
+	LockedUntil           *time.Time     `json:"locked_until"`
 }
 
 // TableName overrides the default GORM table name mapping to place the table inside the administrative schema.
@@ -59,21 +62,22 @@ type UpdateUserRequest struct {
 
 // UserResponse is the public representation of a user (no password).
 type UserResponse struct {
-	ID           uint                    `json:"id"`
-	Email        string                  `json:"email"`
-	FirstName    string                  `json:"first_name"`
-	LastName     string                  `json:"last_name"`
-	IsActive     bool                    `json:"is_active"`
-	CreateBy     *uint                   `json:"create_by"`
-	CreateAt     time.Time               `json:"create_at"`
-	UpdateBy     *uint                   `json:"update_by"`
-	UpdateAt     time.Time               `json:"update_at"`
-	CreateByName string                  `json:"create_by_name"`
-	UpdateByName string                  `json:"update_by_name"`
-	RoleID       *uint                   `json:"role_id"`
-	RoleCode     string                  `json:"role_code"`
-	Companies    []companyDomain.Company `json:"companies,omitempty"`
-	CodeRefer    string                  `json:"code_refer"`
+	ID                    uint                    `json:"id"`
+	Email                 string                  `json:"email"`
+	FirstName             string                  `json:"first_name"`
+	LastName              string                  `json:"last_name"`
+	IsActive              bool                    `json:"is_active"`
+	CreateBy              *uint                   `json:"create_by"`
+	CreateAt              time.Time               `json:"create_at"`
+	UpdateBy              *uint                   `json:"update_by"`
+	UpdateAt              time.Time               `json:"update_at"`
+	CreateByName          string                  `json:"create_by_name"`
+	UpdateByName          string                  `json:"update_by_name"`
+	RoleID                *uint                   `json:"role_id"`
+	RoleCode              string                  `json:"role_code"`
+	Companies             []companyDomain.Company `json:"companies,omitempty"`
+	CodeRefer             string                  `json:"code_refer"`
+	RequiereResetPassword bool                    `json:"requiere_reset_password"`
 }
 
 // ToUserResponse converts a User entity to a UserResponse DTO.
@@ -83,21 +87,22 @@ func ToUserResponse(u *User) *UserResponse {
 		roleCode = u.Role.Code
 	}
 	return &UserResponse{
-		ID:           u.ID,
-		Email:        u.Email,
-		FirstName:    u.FirstName,
-		LastName:     u.LastName,
-		IsActive:     u.IsActive,
-		CreateBy:     u.CreateBy,
-		CreateAt:     u.CreateAt,
-		UpdateBy:     u.UpdateBy,
-		UpdateAt:     u.UpdateAt,
-		CreateByName: u.CreateByName,
-		UpdateByName: u.UpdateByName,
-		RoleID:       u.RoleID,
-		RoleCode:     roleCode,
-		Companies:    u.Companies,
-		CodeRefer:    u.CodeRefer,
+		ID:                    u.ID,
+		Email:                 u.Email,
+		FirstName:             u.FirstName,
+		LastName:              u.LastName,
+		IsActive:              u.IsActive,
+		CreateBy:              u.CreateBy,
+		CreateAt:              u.CreateAt,
+		UpdateBy:              u.UpdateBy,
+		UpdateAt:              u.UpdateAt,
+		CreateByName:          u.CreateByName,
+		UpdateByName:          u.UpdateByName,
+		RoleID:                u.RoleID,
+		RoleCode:              roleCode,
+		Companies:             u.Companies,
+		CodeRefer:             u.CodeRefer,
+		RequiereResetPassword: u.RequiereResetPassword,
 	}
 }
 

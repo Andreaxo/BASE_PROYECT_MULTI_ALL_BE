@@ -11,10 +11,10 @@ import (
 
 var translations = map[string]map[string]string{
 	"es": {
-		"email_required":             "El correo electrónico es requerido",
-		"invalid_email":              "Ingrese un correo válido",
-		"password_required":          "La contraseña es requerida",
-		"invalid_credentials":        "Credenciales inválidas",
+		"email_required":             "Por favor ingresa tu correo electrónico.",
+		"invalid_email":              "Ingresa un formato de correo electrónico válido.",
+		"password_required":          "Por favor ingresa tu contraseña.",
+		"invalid_credentials":        "El correo electrónico o la contraseña son incorrectos.",
 		"invalid_user_id":            "ID de usuario inválido",
 		"user_not_found":             "Usuario no encontrado",
 		"invalid_company_id":         "ID de empresa inválido",
@@ -48,6 +48,8 @@ var translations = map[string]map[string]string{
 		"email_duplicate":                "El correo electrónico ya se encuentra registrado en la plataforma.",
 		"company_has_active_benefits":    "No es posible eliminar la empresa porque tiene beneficios activos asociados. Debe desactivarlos o eliminarlos primero.",
 		"company_has_active_users":       "No es posible eliminar la empresa porque tiene validadores de negocio o usuarios activos asociados. Debe desactivarlos o reasignarlos primero.",
+		"user_inactive":                  "Tu cuenta se encuentra inactiva. Por favor, revisa tu correo de activación o contacta al administrador.",
+		"user_not_found_email":           "No existe ningún usuario registrado con este correo electrónico.",
 	},
 	"en": {
 		"email_required":             "Email is required",
@@ -87,6 +89,8 @@ var translations = map[string]map[string]string{
 		"email_duplicate":                "This email address is already registered on the platform.",
 		"company_has_active_benefits":    "Cannot delete company because it has active benefits associated. Please deactivate or delete them first.",
 		"company_has_active_users":       "Cannot delete company because it has active business validators or users associated. Please deactivate or reassign them first.",
+		"user_inactive":                  "The user account is inactive.",
+		"user_not_found_email":           "No user registered with this email address.",
 	},
 	"fr": {
 		"email_required":             "L'adresse e-mail est requise",
@@ -175,15 +179,17 @@ func TranslateError(c *gin.Context, err error) string {
 	// Direct match mappings
 	switch msg {
 	case "invalid credentials":
-		return T(c, "invalid_credentials", "Credenciales inválidas")
-	case "user account is inactive":
-		return T(c, "user_inactive", "La cuenta de usuario está inactiva")
+		return T(c, "invalid_credentials", "El correo electrónico o la contraseña son incorrectos.")
+	case "user account is inactive", "la cuenta de usuario se encuentra inactiva":
+		return T(c, "user_inactive", "Tu cuenta se encuentra inactiva. Por favor, revisa tu correo de activación o contacta al administrador.")
 	case "la contraseña actual y la confirmación no coinciden":
 		return T(c, "passwords_do_not_match", "Las contraseñas no coinciden")
 	case "la contraseña actual es incorrecta":
 		return T(c, "incorrect_current_password", "La contraseña actual es incorrecta")
 	case "usuario no encontrado", "user not found":
 		return T(c, "user_not_found", "Usuario no encontrado")
+	case "no se encontró ningún usuario registrado con este correo electrónico", "no existe ningún usuario registrado con este correo electrónico":
+		return T(c, "user_not_found_email", "No existe ningún usuario registrado con este correo electrónico.")
 	case "failed to generate token":
 		return T(c, "failed_generate_token", "Error al generar el token de sesión")
 	case "No file uploaded":

@@ -28,6 +28,15 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 
+	roleVal, _ := c.Get("role")
+	roleCode, _ := roleVal.(string)
+	if roleCode != "superadmin" {
+		if req.RoleID != nil && *req.RoleID == 1 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No tiene permisos para crear usuarios con el rol de Super Administrador"})
+			return
+		}
+	}
+
 	createdBy := getUserIDFromContext(c)
 
 	response, err := h.service.CreateUser(&req, createdBy)
@@ -77,10 +86,28 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 	id := uint(idVal)
 
+	roleVal, _ := c.Get("role")
+	roleCode, _ := roleVal.(string)
+
+	if roleCode != "superadmin" {
+		targetUser, err := h.service.GetUserByID(id)
+		if err == nil && targetUser != nil && targetUser.RoleID != nil && *targetUser.RoleID == 1 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No tiene permisos para modificar a un Super Administrador"})
+			return
+		}
+	}
+
 	var req domain.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		i18n.Error(c, http.StatusBadRequest, err)
 		return
+	}
+
+	if roleCode != "superadmin" {
+		if req.RoleID != nil && *req.RoleID == 1 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "No tiene permisos para asignar el rol de Super Administrador"})
+			return
+		}
 	}
 
 	updatedBy := getUserIDFromContext(c)

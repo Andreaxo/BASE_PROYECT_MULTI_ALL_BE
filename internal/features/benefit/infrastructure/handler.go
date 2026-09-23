@@ -47,6 +47,20 @@ func (h *BenefitHandler) getUserEmpresaAndRole(c *gin.Context) (*uint, string) {
 		Where("u.id = ?", userID).
 		Scan(&user)
 
+	if user.EmpresaID == nil || *user.EmpresaID == 0 {
+		var userComp struct {
+			CompanyID uint `gorm:"column:company_id"`
+		}
+		if err := h.db.Table("administrative.user_companies").
+			Select("company_id").
+			Where("user_id = ?", userID).
+			Order("company_id ASC").
+			Limit(1).
+			Scan(&userComp).Error; err == nil && userComp.CompanyID > 0 {
+			user.EmpresaID = &userComp.CompanyID
+		}
+	}
+
 	return user.EmpresaID, user.RoleCode
 }
 
@@ -58,14 +72,13 @@ func (h *BenefitHandler) Create(c *gin.Context) {
 	}
 
 	empresaID, roleCode := h.getUserEmpresaAndRole(c)
-	if roleCode == "business_validator" {
-		if req.CompanyBenefits == nil || *req.CompanyBenefits == 0 {
-			if empresaID == nil {
-				c.JSON(http.StatusForbidden, gin.H{"error": "Tu usuario de negocio no tiene una empresa vinculada"})
-				return
-			}
-			req.CompanyBenefits = empresaID
+	if roleCode != "superadmin" && roleCode != "admin" {
+		if empresaID == nil || *empresaID == 0 {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Tu usuario no tiene una empresa vinculada para crear beneficios"})
+			return
 		}
+		// Una empresa solo puede crear beneficios para su propia empresa
+		req.CompanyBenefits = empresaID
 	}
 
 	benefit, err := h.service.CreateBenefit(&req)
@@ -89,13 +102,17 @@ func (h *BenefitHandler) GetAll(c *gin.Context) {
 
 func (h *BenefitHandler) GetMyCompanyBenefits(c *gin.Context) {
 	empresaID, roleCode := h.getUserEmpresaAndRole(c)
-	if roleCode == "business_validator" && empresaID != nil {
-		benefits, err := h.service.GetBenefitsByCompany(*empresaID)
-		if err != nil {
-			i18n.Error(c, http.StatusInternalServerError, err)
+	if roleCode != "superadmin" && roleCode != "admin" {
+		if empresaID != nil {
+			benefits, err := h.service.GetBenefitsByCompany(*empresaID)
+			if err != nil {
+				i18n.Error(c, http.StatusInternalServerError, err)
+				return
+			}
+			c.JSON(http.StatusOK, benefits)
 			return
 		}
-		c.JSON(http.StatusOK, benefits)
+		c.JSON(http.StatusOK, []domain.Benefit{})
 		return
 	}
 
@@ -134,7 +151,7 @@ func (h *BenefitHandler) Update(c *gin.Context) {
 	id := uint(idVal)
 
 	empresaID, roleCode := h.getUserEmpresaAndRole(c)
-	if roleCode == "business_validator" {
+	if roleCode != "superadmin" && roleCode != "admin" {
 		existing, err := h.service.GetBenefitByID(id)
 		if err != nil {
 			i18n.Error(c, http.StatusNotFound, err)
@@ -150,6 +167,10 @@ func (h *BenefitHandler) Update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		i18n.Error(c, http.StatusBadRequest, err)
 		return
+	}
+
+	if roleCode != "superadmin" && roleCode != "admin" {
+		req.CompanyBenefits = empresaID
 	}
 
 	benefit, err := h.service.UpdateBenefit(id, &req)
@@ -170,7 +191,7 @@ func (h *BenefitHandler) Delete(c *gin.Context) {
 	id := uint(idVal)
 
 	empresaID, roleCode := h.getUserEmpresaAndRole(c)
-	if roleCode == "business_validator" {
+	if roleCode != "superadmin" && roleCode != "admin" {
 		existing, err := h.service.GetBenefitByID(id)
 		if err != nil {
 			i18n.Error(c, http.StatusNotFound, err)

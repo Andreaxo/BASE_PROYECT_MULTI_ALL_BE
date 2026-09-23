@@ -1,6 +1,8 @@
 package infrastructure
 
 import (
+	"strings"
+
 	"gorm.io/gorm"
 
 	"multicliente-backend/internal/features/user/domain"
@@ -60,7 +62,7 @@ func (r *userRepository) FindByID(id uint) (*domain.User, error) {
 
 func (r *userRepository) FindByEmail(email string) (*domain.User, error) {
 	var user domain.User
-	if err := r.db.Preload("Role").Preload("Companies").First(&user, "email = ?", email).Error; err != nil {
+	if err := r.db.Preload("Role").Preload("Companies").First(&user, "LOWER(email) = LOWER(?)", strings.TrimSpace(email)).Error; err != nil {
 		return nil, err
 	}
 	r.populateAudits([]*domain.User{&user})

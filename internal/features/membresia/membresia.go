@@ -10,6 +10,7 @@ import (
 	"multicliente-backend/internal/features/membresia/application"
 	"multicliente-backend/internal/features/membresia/domain"
 	"multicliente-backend/internal/features/membresia/infrastructure"
+	notificacionDomain "multicliente-backend/internal/features/notificacion/domain"
 	"multicliente-backend/internal/platform/middleware"
 )
 
@@ -20,17 +21,19 @@ func RegisterRoutes(
 	publicRouter *gin.RouterGroup,
 	db *gorm.DB,
 	userRepo userDomain.UserRepository,
+	notifSvc notificacionDomain.NotificacionService,
 	wompiPublicKey string,
 	wompiPrivateKey string,
 	wompiEventsSecret string,
+	wompiIntegritySecret string,
 	wompiSandbox bool,
 ) domain.MembresiaService {
 	membRepo := infrastructure.NewMembresiaRepository(db)
 	pagoRepo := infrastructure.NewPagoMembresiaRepository(db)
 	referidoRepo := referidoInfra.NewReferidoRepository(db)
-	wompiClient := infrastructure.NewWompiClient(wompiPublicKey, wompiPrivateKey, wompiEventsSecret, wompiSandbox)
+	wompiClient := infrastructure.NewWompiClient(wompiPublicKey, wompiPrivateKey, wompiEventsSecret, wompiIntegritySecret, wompiSandbox)
 
-	service := application.NewMembresiaService(db, membRepo, pagoRepo, referidoRepo, userRepo, wompiClient)
+	service := application.NewMembresiaService(db, membRepo, pagoRepo, referidoRepo, userRepo, wompiClient, notifSvc)
 	handler := infrastructure.NewMembresiaHandler(service)
 	webhookHandler := infrastructure.NewWebhookHandler(service)
 

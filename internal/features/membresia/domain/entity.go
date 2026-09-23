@@ -56,7 +56,7 @@ func (PagoMembresia) TableName() string {
 
 // IniciarPagoRequest is the payload to start a membership payment flow.
 type IniciarPagoRequest struct {
-	RedirectURL string `json:"redirect_url" binding:"required"`
+	RedirectURL string `json:"redirect_url"`
 }
 
 // IniciarPagoResponse is returned with the Wompi checkout URL.
@@ -76,6 +76,7 @@ type MembresiaResponse struct {
 	RenovacionAutomatica bool       `json:"renovacion_automatica"`
 	TieneMetodoPago      bool       `json:"tiene_metodo_pago"`
 	CreateAt             time.Time  `json:"create_at"`
+	UltimoPagoEstado     *string    `json:"ultimo_pago_estado,omitempty"`
 }
 
 // ToMembresiaResponse converts a Membresia entity to a MembresiaResponse DTO.

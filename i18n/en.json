@@ -35,5 +35,7 @@
   "company_name_duplicate": "A company is already registered with this commercial name.",
   "email_duplicate": "This email address is already registered on the platform.",
   "company_has_active_benefits": "Cannot delete company because it has active benefits associated. Please deactivate or delete them first.",
-  "company_has_active_users": "Cannot delete company because it has active business validators or users associated. Please deactivate or reassign them first."
+  "company_has_active_users": "Cannot delete company because it has active business validators or users associated. Please deactivate or reassign them first.",
+  "user_inactive": "The user account is inactive.",
+  "user_not_found_email": "No user registered with this email address."
 }

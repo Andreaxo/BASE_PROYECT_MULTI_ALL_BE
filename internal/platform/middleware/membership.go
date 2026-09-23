@@ -25,8 +25,8 @@ func RequireMembresiaActiva(db *gorm.DB) gin.HandlerFunc {
 		}
 		role := strings.ToLower(strings.TrimSpace(roleVal.(string)))
 
-		// Superadmin and admin always pass unconditionally
-		if role == "superadmin" || role == "super_admin" || role == "admin" {
+		// Superadmin, admin and operador always pass unconditionally
+		if role == "superadmin" || role == "super_admin" || role == "admin" || role == "operador" {
 			c.Next()
 			return
 		}

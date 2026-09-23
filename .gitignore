@@ -25,3 +25,11 @@
 
 # Logs
 *.log
+
+# Scratch scripts and temporary configs
+scratch/
+ngrok.yml
+
+# Media uploads
+uploads/*
+!uploads/.gitkeep

@@ -1,0 +1,28 @@
+# Version control
+.git
+.gitignore
+
+# Environment and secrets
+.env
+.env.*
+!.env.production.example
+ngrok.yml
+
+# Compiled binaries and local builds
+*.exe
+main.exe
+server.exe
+server_test.exe
+
+# Local uploads and media
+uploads/*
+!uploads/.gitkeep
+
+# Logs and temp files
+*.log
+tmp/
+temp/
+
+# OS specific files
+.DS_Store
+Thumbs.db

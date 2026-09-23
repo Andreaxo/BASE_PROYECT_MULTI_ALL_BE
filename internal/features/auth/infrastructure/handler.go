@@ -2,13 +2,17 @@ package infrastructure
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"multicliente-backend/internal/features/auth/domain"
 	userDomain "multicliente-backend/internal/features/user/domain"
 	"multicliente-backend/internal/platform/i18n"
+	"multicliente-backend/internal/platform/middleware"
 )
 
 // AuthHandler handles HTTP requests for authentication.
@@ -31,6 +35,32 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	response, err := h.service.Login(&req)
 	if err != nil {
+		errStr := err.Error()
+		if strings.HasPrefix(errStr, "cuenta_bloqueada:") {
+			parts := strings.Split(errStr, ":")
+			mins := "15"
+			if len(parts) > 1 {
+				mins = parts[1]
+			}
+			c.JSON(http.StatusLocked, gin.H{
+				"error":     fmt.Sprintf("Tu cuenta ha sido bloqueada temporalmente por %s minutos debido a múltiples intentos fallidos de inicio de sesión.", mins),
+				"is_locked": true,
+				"minutes":   mins,
+			})
+			return
+		}
+		if strings.HasPrefix(errStr, "credenciales_invalidas:") {
+			parts := strings.Split(errStr, ":")
+			rem := "4"
+			if len(parts) > 1 {
+				rem = parts[1]
+			}
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error":              fmt.Sprintf("Credenciales inválidas. Te quedan %s intentos antes de que tu cuenta sea bloqueada por 15 minutos.", rem),
+				"remaining_attempts": rem,
+			})
+			return
+		}
 		c.JSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateError(c, err)})
 		return
 	}
@@ -39,6 +69,33 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.SetCookie("token", response.Token, response.SessionDurationSeconds, "/", "", false, true)
 
 	c.JSON(http.StatusOK, response)
+}
+
+// Logout handles POST /api/auth/logout.
+// Invalidates the JWT token in the blacklist and destroys the httpOnly session cookie.
+func (h *AuthHandler) Logout(c *gin.Context) {
+	tokenString := ""
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "bearer") {
+			tokenString = parts[1]
+		}
+	}
+	if tokenString == "" {
+		if cookieToken, err := c.Cookie("token"); err == nil {
+			tokenString = cookieToken
+		}
+	}
+
+	if tokenString != "" {
+		middleware.GlobalTokenBlacklist.Revoke(tokenString, time.Now().Add(24*time.Hour))
+	}
+
+	// Destroy session cookie in browser
+	c.SetCookie("token", "", -1, "/", "", false, true)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Sesión cerrada correctamente"})
 }
 
 // Register handles POST /api/auth/register (public endpoint).
@@ -201,4 +258,91 @@ func (h *AuthHandler) ValidarCodigoEmpresa(c *gin.Context) {
 		"codigo_empresa": company.CodigoEmpresa,
 	})
 }
+
+// OlvidePassword handles POST /api/auth/olvide-password (public)
+func (h *AuthHandler) OlvidePassword(c *gin.Context) {
+	var req domain.OlvidePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	if err := h.service.OlvidePassword(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Se ha enviado un correo electrónico con las instrucciones para restablecer tu contraseña.",
+	})
+}
+
+// VerificarCodigo handles POST /api/auth/verificar-codigo (public)
+func (h *AuthHandler) VerificarCodigo(c *gin.Context) {
+	var req domain.VerificarCodigoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	response, err := h.service.VerificarCodigo(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ResetPassword handles POST /api/auth/reset-password (public)
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req domain.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	if err := h.service.ResetPassword(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Tu contraseña ha sido actualizada con éxito. Ya puedes iniciar sesión con tus nuevas credenciales.",
+	})
+}
+
+// RegistroAsistido handles POST /api/auth/registro-asistido (protected, operador or superadmin)
+func (h *AuthHandler) RegistroAsistido(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": i18n.TranslateError(c, errors.New("user not authenticated"))})
+		return
+	}
+
+	var operadorID uint
+	if f, ok := userIDVal.(float64); ok {
+		operadorID = uint(f)
+	} else if u, ok := userIDVal.(uint); ok {
+		operadorID = u
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, errors.New("invalid user ID format"))})
+		return
+	}
+
+	var req domain.RegistroAsistidoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	response, err := h.service.RegistroAsistido(&req, operadorID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": i18n.TranslateError(c, err)})
+		return
+	}
+
+	c.JSON(http.StatusCreated, response)
+}
+
 

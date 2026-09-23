@@ -6,20 +6,19 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"multicliente-backend/internal/features/article"
-	articleDomain "multicliente-backend/internal/features/article/domain"
 	"multicliente-backend/internal/features/auth"
+	authDomain "multicliente-backend/internal/features/auth/domain"
 	"multicliente-backend/internal/features/benefit"
 	benefitDomain "multicliente-backend/internal/features/benefit/domain"
 	"multicliente-backend/internal/features/benefit_redemption"
-	"multicliente-backend/internal/features/category"
-	categoryDomain "multicliente-backend/internal/features/category/domain"
 	"multicliente-backend/internal/features/company"
 	companyDomain "multicliente-backend/internal/features/company/domain"
 	"multicliente-backend/internal/features/membresia"
 	membresiaDomain "multicliente-backend/internal/features/membresia/domain"
 	"multicliente-backend/internal/features/menu"
 	menuDomain "multicliente-backend/internal/features/menu/domain"
+	"multicliente-backend/internal/features/notificacion"
+	notificacionDomain "multicliente-backend/internal/features/notificacion/domain"
 	"multicliente-backend/internal/features/referido"
 	referidoDomain "multicliente-backend/internal/features/referido/domain"
 	"multicliente-backend/internal/features/rifa"
@@ -32,6 +31,7 @@ import (
 	"multicliente-backend/internal/platform/database"
 	"multicliente-backend/internal/platform/database/migrations"
 	"multicliente-backend/internal/platform/database/seeds"
+	"multicliente-backend/internal/platform/email"
 	"multicliente-backend/internal/platform/middleware"
 	"multicliente-backend/internal/platform/server"
 )
@@ -50,8 +50,6 @@ func main() {
 	err = migrations.Migrate(db,
 		&companyDomain.Company{},
 		&benefitDomain.Benefit{},
-		&categoryDomain.Category{},
-		&articleDomain.Article{},
 		&roleDomain.Role{},
 		&roleDomain.Option{},
 		&roleDomain.Permission{},
@@ -61,6 +59,9 @@ func main() {
 		&membresiaDomain.Membresia{},
 		&membresiaDomain.PagoMembresia{},
 		&membresiaDomain.Configuracion{},
+		&authDomain.PasswordResetToken{},
+		&authDomain.PasswordResetCode{},
+		&notificacionDomain.Notificacion{},
 	)
 	if err != nil {
 		log.Fatalf("❌ Failed to run migrations: %v", err)
@@ -84,16 +85,20 @@ func main() {
 	superAdminRequired := middleware.RequireRole("superadmin")
 	requireCompanyAccess := middleware.RequireCompanyAccess(db)
 
+	// Email service
+	emailSvc := email.NewEmailService(cfg.ResendAPIKey, cfg.ResendFromEmail, cfg.FrontendURL)
+
+	// Notifications
+	notifSvc := notificacion.RegisterRoutes(api, db, emailSvc, cfg.JWTSecret)
+
 	// Register features
 	userRepo := user.RegisterRoutes(protected, db)
 	referidoSvc := referido.RegisterRoutes(protected, db)
 	companyRepo := company.RegisterRoutes(protected, db, superAdminRequired)
-	auth.RegisterRoutes(api, userRepo, referidoSvc, companyRepo, db, cfg.JWTSecret, cfg.JWTExpirationHours)
+	auth.RegisterRoutes(api, userRepo, referidoSvc, companyRepo, db, emailSvc, cfg.JWTSecret, cfg.JWTExpirationHours)
 	role.RegisterRoutes(protected, db, superAdminRequired)
 	menu.RegisterRoutes(protected, db, superAdminRequired)
 	benefit.RegisterRoutes(protected, db, requireCompanyAccess)
-	category.RegisterRoutes(protected, db, requireCompanyAccess)
-	article.RegisterRoutes(protected, db, requireCompanyAccess)
 	rifa.RegisterRoutes(protected, db)
 	benefit_redemption.RegisterRoutes(protected, db)
 	upload.RegisterRoutes(protected)
@@ -104,9 +109,11 @@ func main() {
 		api,
 		db,
 		userRepo,
+		notifSvc,
 		cfg.WompiPublicKey,
 		cfg.WompiPrivateKey,
 		cfg.WompiEventsSecret,
+		cfg.WompiIntegritySecret,
 		cfg.WompiSandbox,
 	)
 

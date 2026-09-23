@@ -21,10 +21,18 @@ type Config struct {
 	ServerPort string
 
 	// Wompi payment gateway
-	WompiPublicKey    string
-	WompiPrivateKey   string
-	WompiEventsSecret string
-	WompiSandbox      bool
+	WompiPublicKey       string
+	WompiPrivateKey      string
+	WompiEventsSecret    string
+	WompiIntegritySecret string
+	WompiSandbox         bool
+
+	// Resend email service
+	ResendAPIKey    string
+	ResendFromEmail string
+
+	// Frontend URL for email links
+	FrontendURL string
 }
 
 // Load reads the .env file and returns a Config struct with all values.
@@ -47,10 +55,15 @@ func Load() *Config {
 
 		ServerPort: getEnv("SERVER_PORT", "8080"),
 
-		WompiPublicKey:    getEnv("WOMPI_PUBLIC_KEY", ""),
-		WompiPrivateKey:   getEnv("WOMPI_PRIVATE_KEY", ""),
-		WompiEventsSecret: getEnv("WOMPI_EVENTS_SECRET", ""),
-		WompiSandbox:      sandbox == "true" || sandbox == "1",
+		WompiPublicKey:       getEnv("WOMPI_PUBLIC_KEY", ""),
+		WompiPrivateKey:      getEnv("WOMPI_PRIVATE_KEY", ""),
+		WompiEventsSecret:    getEnv("WOMPI_EVENTS_SECRET", ""),
+		WompiIntegritySecret: getEnv("WOMPI_INTEGRITY_SECRET", ""),
+		WompiSandbox:         sandbox == "true" || sandbox == "1",
+
+		ResendAPIKey:    getEnv("RESEND_API_KEY", ""),
+		ResendFromEmail: getEnv("RESEND_FROM_EMAIL", "onboarding@resend.dev"),
+		FrontendURL:     getEnv("FRONTEND_URL", "http://localhost:3000"),
 	}
 }
 

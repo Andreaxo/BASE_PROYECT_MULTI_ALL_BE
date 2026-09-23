@@ -303,5 +303,86 @@ func Migrate(db *gorm.DB, models ...interface{}) error {
 		END $$;
 	`)
 
+	// Create CHECK constraints and indexes for notificaciones
+	notifConstraints := []string{
+		`DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'notificaciones'
+				  AND constraint_name = 'chk_notificacion_tipo'
+			) THEN
+				ALTER TABLE administrative.notificaciones
+				ADD CONSTRAINT chk_notificacion_tipo
+				CHECK (tipo IN ('pago_membresia_aprobado', 'pago_membresia_rechazado'));
+			END IF;
+		END $$`,
+	}
+
+	notifIndexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_notificaciones_usuario_leido ON administrative.notificaciones (usuario_id, leido)`,
+	}
+
+	for _, stmt := range notifConstraints {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("failed to create notificaciones constraint: %w", err)
+		}
+	}
+	for _, stmt := range notifIndexes {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("failed to create notificaciones index: %w", err)
+		}
+	}
+
+	// Create CHECK constraints and indexes for password_reset_tokens
+	tokenConstraints := []string{
+		`DO $$ BEGIN
+			IF NOT EXISTS (
+				SELECT 1 FROM information_schema.table_constraints
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'password_reset_tokens'
+				  AND constraint_name = 'chk_password_reset_tokens_tipo'
+			) THEN
+				ALTER TABLE administrative.password_reset_tokens
+				ADD CONSTRAINT chk_password_reset_tokens_tipo
+				CHECK (tipo IN ('recuperacion', 'activacion'));
+			END IF;
+		END $$`,
+	}
+
+	tokenIndexes := []string{
+		`CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_usuario ON administrative.password_reset_tokens (usuario_id, usado)`,
+	}
+
+	for _, stmt := range tokenConstraints {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("failed to create password_reset_tokens constraint: %w", err)
+		}
+	}
+	for _, stmt := range tokenIndexes {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("failed to create password_reset_tokens index: %w", err)
+		}
+	}
+
+	// Create table and index for password_reset_code
+	codeStatements := []string{
+		`CREATE TABLE IF NOT EXISTS administrative.password_reset_code (
+			id BIGSERIAL PRIMARY KEY,
+			usuario_id BIGINT NOT NULL REFERENCES administrative.users(id),
+			codigo_hash VARCHAR(255) NOT NULL,
+			intentos_fallidos INT NOT NULL DEFAULT 0,
+			usado BOOLEAN NOT NULL DEFAULT false,
+			expira_at TIMESTAMPTZ NOT NULL,
+			create_at TIMESTAMPTZ NOT NULL DEFAULT now()
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_password_reset_code_usuario ON administrative.password_reset_code (usuario_id)`,
+	}
+	for _, stmt := range codeStatements {
+		if err := db.Exec(stmt).Error; err != nil {
+			return fmt.Errorf("failed to create password_reset_code: %w", err)
+		}
+	}
+
 	return nil
 }
