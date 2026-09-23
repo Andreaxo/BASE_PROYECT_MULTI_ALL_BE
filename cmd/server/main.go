@@ -41,8 +41,12 @@ func main() {
 	cfg := config.Load()
 
 	// Connect to PostgreSQL
-	log.Printf("🔌 Connecting to PostgreSQL at %s:%s (database: '%s', user: '%s', sslmode: '%s')...",
-		cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, cfg.DBSSLMode)
+	if cfg.DatabaseURL != "" {
+		log.Println("🔌 Connecting to PostgreSQL using DATABASE_URL...")
+	} else {
+		log.Printf("🔌 Connecting to PostgreSQL at %s:%s (database: '%s', user: '%s', sslmode: '%s')...",
+			cfg.DBHost, cfg.DBPort, cfg.DBName, cfg.DBUser, cfg.DBSSLMode)
+	}
 	db, err := database.Connect(cfg)
 	if err != nil {
 		log.Fatalf("❌ Failed to connect to database: %v", err)

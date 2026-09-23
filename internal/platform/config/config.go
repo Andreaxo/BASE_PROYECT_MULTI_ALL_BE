@@ -8,12 +8,13 @@ import (
 
 // Config holds all configuration values loaded from environment variables.
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	DBSSLMode  string
+	DatabaseURL string
+	DBHost      string
+	DBPort      string
+	DBUser      string
+	DBPassword  string
+	DBName      string
+	DBSSLMode   string
 
 	JWTSecret          string
 	JWTExpirationHours string
@@ -43,7 +44,8 @@ func Load() *Config {
 	sandbox := getEnv("WOMPI_SANDBOX", "true")
 
 	return &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
+		DatabaseURL: getEnv("DATABASE_URL", ""),
+		DBHost:      getEnv("DB_HOST", "localhost"),
 		DBPort:     getEnv("DB_PORT", "5432"),
 		DBUser:     getEnv("DB_USER", "postgres"),
 		DBPassword: getEnv("DB_PASSWORD", ""),

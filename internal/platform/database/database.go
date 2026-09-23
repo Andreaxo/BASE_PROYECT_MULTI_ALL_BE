@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"strings"
 
 	"multicliente-backend/internal/platform/config"
 
@@ -12,10 +13,16 @@ import (
 
 // Connect establishes a connection to PostgreSQL using GORM.
 func Connect(cfg *config.Config) (*gorm.DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBPassword, cfg.DBName, cfg.DBSSLMode,
-	)
+	var dsn string
+	if cfg.DatabaseURL != "" {
+		dsn = cfg.DatabaseURL
+	} else {
+		escapedPassword := strings.ReplaceAll(cfg.DBPassword, "'", "\\'")
+		dsn = fmt.Sprintf(
+			"host=%s port=%s user=%s password='%s' dbname=%s sslmode=%s",
+			cfg.DBHost, cfg.DBPort, cfg.DBUser, escapedPassword, cfg.DBName, cfg.DBSSLMode,
+		)
+	}
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info),
