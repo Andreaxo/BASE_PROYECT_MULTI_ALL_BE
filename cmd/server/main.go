@@ -12,6 +12,7 @@ import (
 	"multicliente-backend/internal/features/benefit"
 	benefitDomain "multicliente-backend/internal/features/benefit/domain"
 	"multicliente-backend/internal/features/benefit_redemption"
+	benefitRedemptionDomain "multicliente-backend/internal/features/benefit_redemption/domain"
 	"multicliente-backend/internal/features/company"
 	companyDomain "multicliente-backend/internal/features/company/domain"
 	"multicliente-backend/internal/features/membresia"
@@ -23,6 +24,7 @@ import (
 	"multicliente-backend/internal/features/referido"
 	referidoDomain "multicliente-backend/internal/features/referido/domain"
 	"multicliente-backend/internal/features/rifa"
+	rifaDomain "multicliente-backend/internal/features/rifa/domain"
 	"multicliente-backend/internal/features/role"
 	roleDomain "multicliente-backend/internal/features/role/domain"
 	"multicliente-backend/internal/features/upload"
@@ -71,12 +73,16 @@ func main() {
 	err = migrations.Migrate(db,
 		&companyDomain.Company{},
 		&benefitDomain.Benefit{},
+		&benefitRedemptionDomain.BenefitRedemption{},
 		&roleDomain.Role{},
 		&roleDomain.Option{},
 		&roleDomain.Permission{},
 		&menuDomain.Menu{},
 		&userDomain.User{},
 		&referidoDomain.Referido{},
+		&rifaDomain.Rifa{},
+		&rifaDomain.ParticipacionRifa{},
+		&rifaDomain.GanadorRifa{},
 		&membresiaDomain.Membresia{},
 		&membresiaDomain.PagoMembresia{},
 		&membresiaDomain.Configuracion{},

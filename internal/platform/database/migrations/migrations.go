@@ -98,37 +98,53 @@ func Migrate(db *gorm.DB, models ...interface{}) error {
 	}
 
 	// Create CHECK constraints and indexes for the benefit_redemption table.
-	// The table was created manually in BD — these ensure constraints exist idempotently.
 	redemptionConstraints := []string{
 		`DO $$ BEGIN
-			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.table_constraints
-				WHERE table_schema = 'administrative'
-				  AND table_name = 'benefit_redemption'
-				  AND constraint_name = 'chk_redemption_estado'
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = 'administrative' AND table_name = 'benefit_redemption'
 			) THEN
-				ALTER TABLE administrative.benefit_redemption
-				ADD CONSTRAINT chk_redemption_estado
-				CHECK (estado IN ('generado', 'usado', 'vencido'));
+				IF NOT EXISTS (
+					SELECT 1 FROM information_schema.table_constraints
+					WHERE table_schema = 'administrative'
+					  AND table_name = 'benefit_redemption'
+					  AND constraint_name = 'chk_redemption_estado'
+				) THEN
+					ALTER TABLE administrative.benefit_redemption
+					ADD CONSTRAINT chk_redemption_estado
+					CHECK (estado IN ('generado', 'usado', 'vencido'));
+				END IF;
 			END IF;
 		END $$`,
 		`DO $$ BEGIN
-			IF NOT EXISTS (
-				SELECT 1 FROM information_schema.table_constraints
-				WHERE table_schema = 'administrative'
-				  AND table_name = 'benefit_redemption'
-				  AND constraint_name = 'uq_redemption_benefit_usuario'
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = 'administrative' AND table_name = 'benefit_redemption'
 			) THEN
-				ALTER TABLE administrative.benefit_redemption
-				ADD CONSTRAINT uq_redemption_benefit_usuario
-				UNIQUE (benefit_id, usuario_id);
+				IF NOT EXISTS (
+					SELECT 1 FROM information_schema.table_constraints
+					WHERE table_schema = 'administrative'
+					  AND table_name = 'benefit_redemption'
+					  AND constraint_name = 'uq_redemption_benefit_usuario'
+				) THEN
+					ALTER TABLE administrative.benefit_redemption
+					ADD CONSTRAINT uq_redemption_benefit_usuario
+					UNIQUE (benefit_id, usuario_id);
+				END IF;
 			END IF;
 		END $$`,
 	}
 
 	redemptionIndexes := []string{
-		`CREATE INDEX IF NOT EXISTS idx_redemption_benefit ON administrative.benefit_redemption(benefit_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_redemption_usuario ON administrative.benefit_redemption(usuario_id)`,
+		`DO $$ BEGIN
+			IF EXISTS (
+				SELECT 1 FROM information_schema.tables
+				WHERE table_schema = 'administrative' AND table_name = 'benefit_redemption'
+			) THEN
+				CREATE INDEX IF NOT EXISTS idx_redemption_benefit ON administrative.benefit_redemption(benefit_id);
+				CREATE INDEX IF NOT EXISTS idx_redemption_usuario ON administrative.benefit_redemption(usuario_id);
+			END IF;
+		END $$`,
 	}
 
 	for _, stmt := range redemptionConstraints {
