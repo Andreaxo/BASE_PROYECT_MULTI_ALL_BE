@@ -612,6 +612,10 @@ func (s *membresiaService) ConfirmarTransaccion(usuarioID uint, transactionID st
 		return nil, errors.New("id de transacción requerido")
 	}
 
+	if strings.HasPrefix(transactionID, "MEMB-") {
+		return nil, fmt.Errorf("has ingresado la Referencia (%s). Debes ingresar el ID de transacción generado por Wompi al completar el pago (ej: 15324-171829102-4821)", transactionID)
+	}
+
 	log.Printf("🔍 [Wompi Confirm] Querying Wompi API for transaction ID '%s' (User %d)", transactionID, usuarioID)
 	tx, err := s.wompi.GetTransactionByID(transactionID)
 	if err != nil {

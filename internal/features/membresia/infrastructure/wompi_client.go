@@ -268,6 +268,8 @@ func (c *WompiClient) GetTransactionByID(id string) (*WompiTransactionItem, erro
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.privateKey)
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -277,7 +279,22 @@ func (c *WompiClient) GetTransactionByID(id string) (*WompiTransactionItem, erro
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("wompi API error status %d: %s", resp.StatusCode, string(body))
+		var errResp struct {
+			Error struct {
+				Reason string `json:"reason"`
+				Type   string `json:"type"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(body, &errResp); err == nil && errResp.Error.Reason != "" {
+			return nil, fmt.Errorf("Wompi: %s", errResp.Error.Reason)
+		}
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, fmt.Errorf("la transacción '%s' no existe en Wompi (verifica si fue completada o si pertenece al ambiente sandbox/producción)", id)
+		}
+		if resp.StatusCode == http.StatusForbidden {
+			return nil, fmt.Errorf("acceso denegado por Wompi (403). Verifica que la llave privada corresponda a este ambiente")
+		}
+		return nil, fmt.Errorf("wompi API error status %d", resp.StatusCode)
 	}
 
 	var res struct {
