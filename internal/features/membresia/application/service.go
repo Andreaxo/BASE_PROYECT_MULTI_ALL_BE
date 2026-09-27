@@ -177,6 +177,12 @@ func (s *membresiaService) applyTransactionResult(txID, txRef, txStatus, pmToken
 		return fmt.Errorf("no se encontró pago pendiente con referencia: %s (ref: %s)", txID, txRef)
 	}
 
+	// If already approved, skip re-processing gracefully
+	if existingPago.Estado == membresiaDomain.PagoEstadoAprobado {
+		log.Printf("ℹ️ [Idempotency] Payment %d is already APPROVED. Skipping duplicate.", existingPago.ID)
+		return nil
+	}
+
 	// 6. Process in a DB transaction
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		// Re-fetch within transaction
@@ -192,9 +198,9 @@ func (s *membresiaService) applyTransactionResult(txID, txRef, txStatus, pmToken
 
 		// Determine tipo by counting previous approved payments
 		var approvedCount int64
-		tx.Model(&membresiaDomain.PagoMembresia{}).
+		_ = tx.Session(&gorm.Session{}).Model(&membresiaDomain.PagoMembresia{}).
 			Where("membresia_id = ? AND estado = ?", membresia.ID, membresiaDomain.PagoEstadoAprobado).
-			Count(&approvedCount)
+			Count(&approvedCount).Error
 
 		if approvedCount == 0 {
 			pago.Tipo = membresiaDomain.PagoTipoInicial
@@ -213,9 +219,9 @@ func (s *membresiaService) applyTransactionResult(txID, txRef, txStatus, pmToken
 			}
 
 			// Clean up other lingering pending payment attempts for this membership
-			tx.Model(&membresiaDomain.PagoMembresia{}).
+			_ = tx.Session(&gorm.Session{}).Model(&membresiaDomain.PagoMembresia{}).
 				Where("membresia_id = ? AND id != ? AND estado = ?", membresia.ID, pago.ID, membresiaDomain.PagoEstadoPendiente).
-				Update("estado", membresiaDomain.PagoEstadoRechazado)
+				Update("estado", membresiaDomain.PagoEstadoRechazado).Error
 
 			// Activate membership
 			now := time.Now()
@@ -239,14 +245,12 @@ func (s *membresiaService) applyTransactionResult(txID, txRef, txStatus, pmToken
 			}
 
 			// Activate associated company's subscription if the user is linked to a company
-			_ = tx.Exec(`
+			_ = tx.Session(&gorm.Session{}).Exec(`
 				UPDATE administrative.companies SET suscripcion_estado = 'activa'
 				WHERE id IN (
 					SELECT company_id FROM administrative.user_companies WHERE user_id = ?
-					UNION
-					SELECT empresa_id FROM administrative.users WHERE id = ? AND empresa_id IS NOT NULL
 				)
-			`, membresia.UsuarioID, membresia.UsuarioID)
+			`, membresia.UsuarioID).Error
 
 			// Notificar a superadministradores sobre el pago aprobado
 			user, _ := s.userRepo.FindByID(membresia.UsuarioID)
@@ -306,7 +310,8 @@ func (s *membresiaService) applyTransactionResult(txID, txRef, txStatus, pmToken
 func (s *membresiaService) triggerReferidoAfiliacion(tx *gorm.DB, usuarioID uint) {
 	// Find referido record where this user is the referred person and state is 'registrado'
 	var referido referidoDomain.Referido
-	err := tx.
+	// IMPORTANT: tx.Session(&gorm.Session{}) creates a fresh session so ErrRecordNotFound does not pollute tx.Error
+	err := tx.Session(&gorm.Session{}).
 		Where("usuario_referido_id = ? AND estado = ?", usuarioID, referidoDomain.EstadoRegistrado).
 		First(&referido).Error
 	if err != nil {
@@ -318,15 +323,14 @@ func (s *membresiaService) triggerReferidoAfiliacion(tx *gorm.DB, usuarioID uint
 	now := time.Now()
 	referido.Estado = referidoDomain.EstadoAfiliado
 	referido.FechaConversion = &now
-	if err := tx.Save(&referido).Error; err != nil {
+	if err := tx.Session(&gorm.Session{}).Save(&referido).Error; err != nil {
 		log.Printf("⚠️ Failed to affiliate referido %d: %v", referido.ID, err)
 		return
 	}
 
 	// Grant reward: add participation in active raffle for the referente
-	// This replicates the OtorgarRecompensaReferido logic but within the transaction
 	referido.RecompensaOtorgada = true
-	_ = tx.Save(&referido).Error
+	_ = tx.Session(&gorm.Session{}).Save(&referido).Error
 
 	log.Printf("✅ Referido %d affiliated and reward granted for referente %d", referido.ID, referido.UsuarioReferenteID)
 }
@@ -558,10 +562,8 @@ func (s *membresiaService) SimularPago(usuarioID uint, status string) (*membresi
 			UPDATE administrative.companies SET suscripcion_estado = 'activa'
 			WHERE id IN (
 				SELECT company_id FROM administrative.user_companies WHERE user_id = ?
-				UNION
-				SELECT empresa_id FROM administrative.users WHERE id = ? AND empresa_id IS NOT NULL
 			)
-		`, usuarioID, usuarioID)
+		`, usuarioID)
 
 		// Notificar a superadministradores (Simulación)
 		user, _ := s.userRepo.FindByID(usuarioID)
@@ -628,6 +630,14 @@ func (s *membresiaService) ConfirmarTransaccion(usuarioID uint, transactionID st
 	if err := s.applyTransactionResult(tx.ID, tx.Reference, tx.Status, tx.PaymentMethod.Token); err != nil {
 		log.Printf("❌ [Wompi Confirm Error] Failed to apply transaction: %v", err)
 		return nil, err
+	}
+
+	if tx.Status == "PENDING" {
+		return nil, errors.New("la transacción en Wompi aún se encuentra PENDIENTE de aprobación por parte de tu entidad bancaria. Por favor espera unos instantes y vuelve a consultar.")
+	}
+
+	if tx.Status == "DECLINED" || tx.Status == "ERROR" || tx.Status == "VOIDED" {
+		return nil, fmt.Errorf("la transacción fue rechazada o falló en Wompi (Estado: %s)", tx.Status)
 	}
 
 	return s.GetMiMembresia(usuarioID)

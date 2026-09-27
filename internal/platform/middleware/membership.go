@@ -97,13 +97,12 @@ func RequireSuscripcionActiva(db *gorm.DB) gin.HandlerFunc {
 			Limit(1).
 			Scan(&membEstado).Error
 
-		// 2. Find the company's subscription state via user_companies OR users.empresa_id
+		// 2. Find the company's subscription state via user_companies
 		var suscripcionEstado string
 		err := db.Table("administrative.companies c").
 			Select("c.suscripcion_estado").
-			Joins("LEFT JOIN administrative.user_companies uc ON uc.company_id = c.id").
-			Joins("LEFT JOIN administrative.users u ON u.empresa_id = c.id").
-			Where("uc.user_id = ? OR u.id = ?", userID, userID).
+			Joins("JOIN administrative.user_companies uc ON uc.company_id = c.id").
+			Where("uc.user_id = ?", userID).
 			Limit(1).
 			Scan(&suscripcionEstado).Error
 
@@ -114,10 +113,8 @@ func RequireSuscripcionActiva(db *gorm.DB) gin.HandlerFunc {
 				UPDATE administrative.companies SET suscripcion_estado = 'activa'
 				WHERE id IN (
 					SELECT company_id FROM administrative.user_companies WHERE user_id = ?
-					UNION
-					SELECT empresa_id FROM administrative.users WHERE id = ? AND empresa_id IS NOT NULL
 				)
-			`, userID, userID)
+			`, userID)
 		}
 
 		if (err != nil && membEstado != "activa") || (suscripcionEstado != "prueba" && suscripcionEstado != "activa") {

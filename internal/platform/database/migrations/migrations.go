@@ -235,6 +235,9 @@ func Migrate(db *gorm.DB, models ...interface{}) error {
 	// Ensure business_validator (role_id 7) has no access to global admin benefits table (menu_id 12)
 	_ = db.Exec("DELETE FROM administrative.permissions WHERE role_id = 7 AND menu_id = 12")
 
+	// Ensure empresa_id column exists on administrative.users to avoid SQL errors
+	_ = db.Exec("ALTER TABLE administrative.users ADD COLUMN IF NOT EXISTS empresa_id bigint")
+
 	// Backfill user_companies from users.empresa_id for existing validator/negocio users
 	_ = db.Exec(`
 		INSERT INTO administrative.user_companies (user_id, company_id)
