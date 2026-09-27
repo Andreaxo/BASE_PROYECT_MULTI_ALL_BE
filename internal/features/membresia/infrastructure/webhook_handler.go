@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -25,18 +26,21 @@ func (h *WebhookHandler) HandleWompiWebhook(c *gin.Context) {
 	// Read raw body for signature validation
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		log.Printf("❌ [Wompi Webhook] Failed to read request body: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read request body"})
 		return
 	}
 
 	signature := c.GetHeader("X-Event-Checksum")
+	log.Printf("📩 [Wompi Webhook] Received webhook event (%d bytes). Header signature: %s", len(body), signature)
 
 	if err := h.service.ProcessWebhook(body, signature); err != nil {
-		// Log but return 200 to prevent Wompi retries on business logic errors
-		// Only return non-200 on actual processing failures
+		log.Printf("⚠️ [Wompi Webhook Error]: %v", err)
+		// Return 200 with status error so Wompi doesn't unnecessarily flood retries on logic errors
 		c.JSON(http.StatusOK, gin.H{"status": "error", "message": err.Error()})
 		return
 	}
 
+	log.Printf("✅ [Wompi Webhook] Processed successfully")
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }

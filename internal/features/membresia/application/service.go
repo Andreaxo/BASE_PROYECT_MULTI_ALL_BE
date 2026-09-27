@@ -126,16 +126,19 @@ func (s *membresiaService) ProcessWebhook(body []byte, signature string) error {
 	// 1. Parse the event
 	var event infrastructure.WompiWebhookEvent
 	if err := json.Unmarshal(body, &event); err != nil {
+		log.Printf("❌ [Wompi Webhook] JSON parse error: %v", err)
 		return fmt.Errorf("invalid webhook payload: %w", err)
 	}
 
 	// 2. Validate signature
 	if !s.wompi.ValidateWebhookSignature(&event) {
+		log.Printf("❌ [Wompi Webhook] Invalid signature. Checksum received: '%s', Timestamp: %d. Check WOMPI_EVENTS_SECRET in .env!", event.Signature.Checksum, event.Timestamp)
 		return errors.New("invalid webhook signature")
 	}
 
 	// 3. Only process transaction.updated events
 	if event.Event != "transaction.updated" {
+		log.Printf("ℹ️ [Wompi Webhook] Ignoring non-transaction event: '%s'", event.Event)
 		return nil // Ignore other events
 	}
 
@@ -144,6 +147,7 @@ func (s *membresiaService) ProcessWebhook(body []byte, signature string) error {
 	txStatus := event.Data.Transaction.Status
 	pmToken := event.Data.Transaction.PaymentMethod.Token
 
+	log.Printf("🔄 [Wompi Webhook] Processing event for Ref='%s', TxID='%s', Status='%s'", txRef, txID, txStatus)
 	return s.applyTransactionResult(txID, txRef, txStatus, pmToken)
 }
 
@@ -367,8 +371,11 @@ func (s *membresiaService) GetMiMembresia(usuarioID uint) (*membresiaDomain.Memb
 					continue
 				}
 				txs, err := s.wompi.GetTransactionsByReference(*p.ReferenciaPasarela)
-				if err == nil && len(txs) > 0 {
+				if err != nil {
+					log.Printf("⚠️ [Wompi Sync] Error querying reference '%s': %v", *p.ReferenciaPasarela, err)
+				} else if len(txs) > 0 {
 					txItem := txs[0]
+					log.Printf("🔍 [Wompi Sync] Found transaction for ref '%s': ID='%s', Status='%s'", *p.ReferenciaPasarela, txItem.ID, txItem.Status)
 					if txItem.Status == "APPROVED" || txItem.Status == "DECLINED" || txItem.Status == "ERROR" {
 						_ = s.applyTransactionResult(txItem.ID, txItem.Reference, txItem.Status, txItem.PaymentMethod.Token)
 						if txItem.Status == "APPROVED" {
