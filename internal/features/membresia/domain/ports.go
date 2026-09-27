@@ -26,4 +26,5 @@ type MembresiaService interface {
 	RenovarVencidas() error
 	GetAllMembresias() ([]MembresiaResponse, error)
 	SimularPago(usuarioID uint, status string) (*MembresiaResponse, error)
+	ConfirmarTransaccion(usuarioID uint, transactionID string) (*MembresiaResponse, error)
 }

@@ -42,6 +42,7 @@ func RegisterRoutes(
 	{
 		memb.POST("/iniciar-pago", handler.IniciarPago)
 		memb.POST("/simular-pago", handler.SimularPago)
+		memb.POST("/confirmar-transaccion", handler.ConfirmarTransaccion)
 		memb.GET("/mi-membresia", handler.GetMiMembresia)
 		memb.PUT("/cancelar-renovacion", handler.CancelarRenovacion)
 

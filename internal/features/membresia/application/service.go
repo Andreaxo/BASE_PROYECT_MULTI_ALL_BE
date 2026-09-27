@@ -363,19 +363,16 @@ func (s *membresiaService) GetMiMembresia(usuarioID uint) (*membresiaDomain.Memb
 	// 1. Sincronización proactiva con Wompi: Si la membresía está inactiva, verificar pagos pendientes recientes
 	if membresia.Estado != membresiaDomain.MembresiaActiva {
 		var pendingPagos []membresiaDomain.PagoMembresia
-		twoHoursAgo := time.Now().Add(-2 * time.Hour)
-		if err := s.db.Where("membresia_id = ? AND estado = ? AND fecha_pago >= ?", membresia.ID, membresiaDomain.PagoEstadoPendiente, twoHoursAgo).
-			Order("id DESC").Find(&pendingPagos).Error; err == nil && len(pendingPagos) > 0 {
+		if err := s.db.Where("membresia_id = ? AND estado = ?", membresia.ID, membresiaDomain.PagoEstadoPendiente).
+			Order("id DESC").Limit(5).Find(&pendingPagos).Error; err == nil && len(pendingPagos) > 0 {
 			for _, p := range pendingPagos {
 				if p.ReferenciaPasarela == nil || *p.ReferenciaPasarela == "" {
 					continue
 				}
-				txs, err := s.wompi.GetTransactionsByReference(*p.ReferenciaPasarela)
-				if err != nil {
-					log.Printf("⚠️ [Wompi Sync] Error querying reference '%s': %v", *p.ReferenciaPasarela, err)
-				} else if len(txs) > 0 {
-					txItem := txs[0]
-					log.Printf("🔍 [Wompi Sync] Found transaction for ref '%s': ID='%s', Status='%s'", *p.ReferenciaPasarela, txItem.ID, txItem.Status)
+				// Try querying by ID if it's already a gateway ID
+				txItem, err := s.wompi.GetTransactionByID(*p.ReferenciaPasarela)
+				if err == nil && txItem != nil {
+					log.Printf("🔍 [Wompi Sync] Found transaction for ID '%s': Ref='%s', Status='%s'", *p.ReferenciaPasarela, txItem.Reference, txItem.Status)
 					if txItem.Status == "APPROVED" || txItem.Status == "DECLINED" || txItem.Status == "ERROR" {
 						_ = s.applyTransactionResult(txItem.ID, txItem.Reference, txItem.Status, txItem.PaymentMethod.Token)
 						if txItem.Status == "APPROVED" {
@@ -603,6 +600,30 @@ func (s *membresiaService) SimularPago(usuarioID uint, status string) (*membresi
 		if s.notifSvc != nil {
 			_ = s.notifSvc.NotificarPagoSuperadmins(titulo, mensaje, notificacionDomain.TipoPagoRechazado, membresia.ID, "pago_membresia")
 		}
+	}
+
+	return s.GetMiMembresia(usuarioID)
+}
+
+// ConfirmarTransaccion verifies and confirms a Wompi transaction by its Wompi transaction ID.
+func (s *membresiaService) ConfirmarTransaccion(usuarioID uint, transactionID string) (*membresiaDomain.MembresiaResponse, error) {
+	transactionID = strings.TrimSpace(transactionID)
+	if transactionID == "" {
+		return nil, errors.New("id de transacción requerido")
+	}
+
+	log.Printf("🔍 [Wompi Confirm] Querying Wompi API for transaction ID '%s' (User %d)", transactionID, usuarioID)
+	tx, err := s.wompi.GetTransactionByID(transactionID)
+	if err != nil {
+		log.Printf("❌ [Wompi Confirm Error]: %v", err)
+		return nil, fmt.Errorf("error al consultar transacción en Wompi: %w", err)
+	}
+
+	log.Printf("ℹ️ [Wompi Confirm] Wompi returned: ID=%s, Ref=%s, Status=%s", tx.ID, tx.Reference, tx.Status)
+
+	if err := s.applyTransactionResult(tx.ID, tx.Reference, tx.Status, tx.PaymentMethod.Token); err != nil {
+		log.Printf("❌ [Wompi Confirm Error] Failed to apply transaction: %v", err)
+		return nil, err
 	}
 
 	return s.GetMiMembresia(usuarioID)

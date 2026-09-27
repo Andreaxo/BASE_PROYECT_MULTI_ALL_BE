@@ -255,3 +255,36 @@ func (c *WompiClient) GetTransactionsByReference(reference string) ([]WompiTrans
 	}
 	return res.Data, nil
 }
+
+// GetTransactionByID queries Wompi API for a single transaction by its Wompi ID.
+func (c *WompiClient) GetTransactionByID(id string) (*WompiTransactionItem, error) {
+	if c.privateKey == "" || id == "" {
+		return nil, fmt.Errorf("private key or transaction id is empty")
+	}
+
+	reqURL := fmt.Sprintf("%s/transactions/%s", c.baseURL(), url.PathEscape(id))
+	req, err := http.NewRequest(http.MethodGet, reqURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.privateKey)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("wompi API error status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var res struct {
+		Data WompiTransactionItem `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
+	}
+	return &res.Data, nil
+}

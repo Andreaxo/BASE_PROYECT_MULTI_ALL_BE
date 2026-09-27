@@ -112,6 +112,31 @@ func (h *MembresiaHandler) SimularPago(c *gin.Context) {
 	c.JSON(http.StatusOK, res)
 }
 
+// ConfirmarTransaccion handles POST /api/membresia/confirmar-transaccion
+func (h *MembresiaHandler) ConfirmarTransaccion(c *gin.Context) {
+	userID := getUserIDFromContext(c)
+	if userID == nil {
+		i18n.ErrorString(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	var req struct {
+		TransactionID string `json:"transaction_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil || req.TransactionID == "" {
+		i18n.ErrorString(c, http.StatusBadRequest, "id de transacción requerido")
+		return
+	}
+
+	res, err := h.service.ConfirmarTransaccion(*userID, req.TransactionID)
+	if err != nil {
+		i18n.Error(c, http.StatusBadRequest, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, res)
+}
+
 // getUserIDFromContext extracts the authenticated user's uint ID from the Gin context.
 func getUserIDFromContext(c *gin.Context) *uint {
 	userIDVal, exists := c.Get("user_id")
