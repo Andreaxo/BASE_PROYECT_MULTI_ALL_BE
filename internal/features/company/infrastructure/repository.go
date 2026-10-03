@@ -148,6 +148,17 @@ func (r *companyRepository) Create(company *domain.Company, req *domain.CreateCo
 			if err := tx.Exec("INSERT INTO administrative.user_companies (user_id, company_id) VALUES (?, ?) ON CONFLICT DO NOTHING", user.ID, company.ID).Error; err != nil {
 				return err
 			}
+
+			// Assign 1-year free trial membership for the validator user
+			now := time.Now()
+			trialMemb := &membresiaDomain.Membresia{
+				UsuarioID:            user.ID,
+				Estado:               membresiaDomain.MembresiaPrueba,
+				FechaInicio:          &now,
+				FechaFin:             &finPrueba,
+				RenovacionAutomatica: false,
+			}
+			_ = tx.Where("usuario_id = ?", user.ID).Assign(trialMemb).FirstOrCreate(trialMemb).Error
 		}
 
 		return nil
@@ -275,6 +286,33 @@ func (r *companyRepository) FindByCodigoEmpresa(codigo string) (*domain.Company,
 	}
 	r.populateAudits([]*domain.Company{&company})
 	return &company, nil
+}
+
+func (r *companyRepository) FindByCodigoEmpresaOrNIT(identifier string) (*domain.Company, error) {
+	var company domain.Company
+	clean := strings.TrimSpace(identifier)
+	if clean == "" {
+		return nil, errors.New("identificador de empresa vacío")
+	}
+
+	// 1. Try finding by codigo_empresa (case-insensitive)
+	if err := r.db.Where("LOWER(codigo_empresa) = LOWER(?)", clean).First(&company).Error; err == nil {
+		r.populateAudits([]*domain.Company{&company})
+		return &company, nil
+	}
+
+	// 2. Try finding by NIT (if numeric or formatted like 123456789 or 123456789-1)
+	cleanNIT := strings.Split(clean, "-")[0]
+	cleanNIT = strings.ReplaceAll(cleanNIT, ".", "")
+	cleanNIT = strings.TrimSpace(cleanNIT)
+	if nitVal, err := strconv.Atoi(cleanNIT); err == nil {
+		if err := r.db.Where("nit = ?", nitVal).First(&company).Error; err == nil {
+			r.populateAudits([]*domain.Company{&company})
+			return &company, nil
+		}
+	}
+
+	return nil, errors.New("empresa no encontrada por código ni por NIT")
 }
 
 // generateCodigoEmpresa generates a random 8-character code without ambiguous characters.

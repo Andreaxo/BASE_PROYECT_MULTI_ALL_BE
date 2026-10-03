@@ -101,8 +101,8 @@ func RequireSuscripcionActiva(db *gorm.DB) gin.HandlerFunc {
 		var suscripcionEstado string
 		err := db.Table("administrative.companies c").
 			Select("c.suscripcion_estado").
-			Joins("JOIN administrative.user_companies uc ON uc.company_id = c.id").
-			Where("uc.user_id = ?", userID).
+			Joins("LEFT JOIN administrative.user_companies uc ON uc.company_id = c.id").
+			Where("uc.user_id = ? OR c.id = (SELECT empresa_id FROM administrative.users WHERE id = ?)", userID, userID).
 			Limit(1).
 			Scan(&suscripcionEstado).Error
 
@@ -113,11 +113,11 @@ func RequireSuscripcionActiva(db *gorm.DB) gin.HandlerFunc {
 				UPDATE administrative.companies SET suscripcion_estado = 'activa'
 				WHERE id IN (
 					SELECT company_id FROM administrative.user_companies WHERE user_id = ?
-				)
-			`, userID)
+				) OR id = (SELECT empresa_id FROM administrative.users WHERE id = ?)
+			`, userID, userID)
 		}
 
-		if (err != nil && membEstado != "activa") || (suscripcionEstado != "prueba" && suscripcionEstado != "activa") {
+		if (err != nil && membEstado != "activa" && membEstado != "prueba") || (suscripcionEstado != "prueba" && suscripcionEstado != "activa") {
 			c.JSON(http.StatusForbidden, gin.H{"error": i18n.TranslateError(c, errors.New("business_subscription_expired"))})
 			c.Abort()
 			return

@@ -31,6 +31,26 @@ func cleanupOrphanedConstraints(db *gorm.DB) {
 					END;
 				END IF;
 			END IF;
+
+			IF EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_schema = 'administrative'
+				  AND table_name = 'benefit_redemption'
+				  AND column_name = 'codigo_validacion'
+			) THEN
+				IF NOT EXISTS (
+					SELECT 1 FROM information_schema.table_constraints
+					WHERE table_schema = 'administrative'
+					  AND table_name = 'benefit_redemption'
+					  AND constraint_name = 'uni_benefit_redemption_codigo_validacion'
+				) THEN
+					BEGIN
+						ALTER TABLE administrative.benefit_redemption ADD CONSTRAINT uni_benefit_redemption_codigo_validacion UNIQUE (codigo_validacion);
+					EXCEPTION WHEN OTHERS THEN
+						NULL;
+					END;
+				END IF;
+			END IF;
 		END $$;
 	`)
 }
@@ -162,16 +182,17 @@ func Migrate(db *gorm.DB, models ...interface{}) error {
 	// Constraints and indexes for membresia and pago_membresia
 	membresiaConstraints := []string{
 		`DO $$ BEGIN
-			IF NOT EXISTS (
+			IF EXISTS (
 				SELECT 1 FROM information_schema.table_constraints
 				WHERE table_schema = 'administrative'
 				  AND table_name = 'membresia'
 				  AND constraint_name = 'chk_membresia_estado'
 			) THEN
-				ALTER TABLE administrative.membresia
-				ADD CONSTRAINT chk_membresia_estado
-				CHECK (estado IN ('inactiva', 'activa', 'vencida', 'cancelada'));
+				ALTER TABLE administrative.membresia DROP CONSTRAINT chk_membresia_estado;
 			END IF;
+			ALTER TABLE administrative.membresia
+			ADD CONSTRAINT chk_membresia_estado
+			CHECK (estado IN ('inactiva', 'activa', 'vencida', 'cancelada', 'prueba'));
 		END $$`,
 		`DO $$ BEGIN
 			IF NOT EXISTS (

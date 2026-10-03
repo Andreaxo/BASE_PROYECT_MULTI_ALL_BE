@@ -39,6 +39,7 @@ type Rifa struct {
 	FechaInicio time.Time  `gorm:"type:date;not null" json:"fecha_inicio"`
 	FechaFin    time.Time  `gorm:"type:date;not null" json:"fecha_fin"`
 	FechaSorteo time.Time  `gorm:"type:date;not null" json:"fecha_sorteo"`
+	EsPremioMayor bool     `gorm:"default:false" json:"es_premio_mayor"`
 	Estado      string     `gorm:"type:varchar(20);not null;default:'activa'" json:"estado"`
 	CreateBy    *uint      `json:"create_by"`
 	CreateAt    time.Time  `gorm:"type:timestamptz;not null;autoCreateTime" json:"create_at"`
@@ -93,6 +94,7 @@ type CreateRifaRequest struct {
 	FechaInicio string  `json:"fecha_inicio" binding:"required"`
 	FechaFin    string  `json:"fecha_fin" binding:"required"`
 	FechaSorteo string  `json:"fecha_sorteo" binding:"required"`
+	EsPremioMayor *bool `json:"es_premio_mayor"`
 }
 
 type UpdateRifaRequest struct {
@@ -103,6 +105,7 @@ type UpdateRifaRequest struct {
 	FechaInicio *string `json:"fecha_inicio"`
 	FechaFin    *string `json:"fecha_fin"`
 	FechaSorteo *string `json:"fecha_sorteo"`
+	EsPremioMayor *bool `json:"es_premio_mayor"`
 }
 
 type AgregarParticipacionManualRequest struct {
@@ -128,6 +131,7 @@ type RifaResponse struct {
 	FechaInicio time.Time  `json:"fecha_inicio"`
 	FechaFin    time.Time  `json:"fecha_fin"`
 	FechaSorteo time.Time  `json:"fecha_sorteo"`
+	EsPremioMayor bool     `json:"es_premio_mayor"`
 	Estado      string     `json:"estado"`
 	CreateBy    *uint      `json:"create_by"`
 	CreateAt    time.Time  `json:"create_at"`
@@ -173,6 +177,7 @@ func ToRifaResponse(r *Rifa) *RifaResponse {
 		FechaInicio: r.FechaInicio,
 		FechaFin:    r.FechaFin,
 		FechaSorteo: r.FechaSorteo,
+		EsPremioMayor: r.EsPremioMayor,
 		Estado:      r.Estado,
 		CreateBy:    r.CreateBy,
 		CreateAt:    r.CreateAt,

@@ -58,4 +58,8 @@ type RifaService interface {
 	// recompensa_otorgada=false, and grants them raffle participations.
 	// Called when activating a new rifa.
 	OtorgarRecompensasPendientes(rifaID uint) error
+
+	// AsegurarInscripcionTodosLosUsuarios ensures every active user in the system
+	// has at least one participation ticket for the given raffle.
+	AsegurarInscripcionTodosLosUsuarios(rifaID uint) error
 }

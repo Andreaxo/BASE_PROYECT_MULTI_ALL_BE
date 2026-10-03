@@ -337,12 +337,86 @@ func (s *membresiaService) triggerReferidoAfiliacion(tx *gorm.DB, usuarioID uint
 
 // GetMiMembresia returns the membership status for a user.
 func (s *membresiaService) GetMiMembresia(usuarioID uint) (*membresiaDomain.MembresiaResponse, error) {
+	var isBusinessValidator bool
+	var userCreatedAt time.Time
+
 	// 0. Si es superadmin, admin u operador, siempre tiene membresía activa vitalicia/administrativa
-	if user, err := s.userRepo.FindByID(usuarioID); err == nil && user != nil && user.Role != nil {
-		roleCode := strings.ToLower(strings.TrimSpace(user.Role.Code))
-		if roleCode == "superadmin" || roleCode == "admin" || roleCode == "super_admin" || roleCode == "operador" {
-			now := time.Now()
-			future := now.AddDate(100, 0, 0)
+	if user, err := s.userRepo.FindByID(usuarioID); err == nil && user != nil {
+		userCreatedAt = user.CreateAt
+		if user.Role != nil {
+			roleCode := strings.ToLower(strings.TrimSpace(user.Role.Code))
+			if roleCode == "superadmin" || roleCode == "admin" || roleCode == "super_admin" || roleCode == "operador" {
+				now := time.Now()
+				future := now.AddDate(100, 0, 0)
+				return &membresiaDomain.MembresiaResponse{
+					UsuarioID:            usuarioID,
+					Estado:               membresiaDomain.MembresiaActiva,
+					FechaInicio:          &now,
+					FechaFin:             &future,
+					RenovacionAutomatica: false,
+					TieneMetodoPago:      false,
+				}, nil
+			}
+			if roleCode == "business_validator" || roleCode == "negocio" {
+				isBusinessValidator = true
+			}
+		}
+	}
+
+	// 0.1 La membresía de prueba de 1 año APLICA EXCLUSIVAMENTE a negocios aliados (rol business_validator o negocio)
+	if isBusinessValidator {
+		var comp struct {
+			ID                uint
+			Name              string
+			SuscripcionEstado string
+			FechaFinPrueba    *time.Time
+			CreateAt          time.Time
+		}
+		_ = s.db.Table("administrative.companies c").
+			Select("c.id, c.name, c.suscripcion_estado, c.fecha_fin_prueba, c.create_at").
+			Joins("LEFT JOIN administrative.user_companies uc ON uc.company_id = c.id").
+			Where("uc.user_id = ? OR c.id = (SELECT empresa_id FROM administrative.users WHERE id = ?)", usuarioID, usuarioID).
+			Limit(1).
+			Scan(&comp).Error
+
+		now := comp.CreateAt
+		if now.IsZero() {
+			now = userCreatedAt
+		}
+		if now.IsZero() {
+			now = time.Now()
+		}
+
+		fin := comp.FechaFinPrueba
+		if fin == nil {
+			f := now.AddDate(1, 0, 0)
+			fin = &f
+		}
+
+		suscEstado := strings.ToLower(strings.TrimSpace(comp.SuscripcionEstado))
+		if suscEstado == "" || suscEstado == "prueba" || comp.ID == 0 {
+			if time.Now().After(*fin) {
+				return &membresiaDomain.MembresiaResponse{
+					UsuarioID:            usuarioID,
+					Estado:               membresiaDomain.MembresiaVencida,
+					FechaInicio:          &now,
+					FechaFin:             fin,
+					RenovacionAutomatica: false,
+					TieneMetodoPago:      false,
+					CreateAt:             now,
+				}, nil
+			}
+			return &membresiaDomain.MembresiaResponse{
+				UsuarioID:            usuarioID,
+				Estado:               membresiaDomain.MembresiaPrueba,
+				FechaInicio:          &now,
+				FechaFin:             fin,
+				RenovacionAutomatica: false,
+				TieneMetodoPago:      false,
+				CreateAt:             now,
+			}, nil
+		} else if suscEstado == "activa" {
+			future := now.AddDate(1, 0, 0)
 			return &membresiaDomain.MembresiaResponse{
 				UsuarioID:            usuarioID,
 				Estado:               membresiaDomain.MembresiaActiva,
@@ -350,6 +424,17 @@ func (s *membresiaService) GetMiMembresia(usuarioID uint) (*membresiaDomain.Memb
 				FechaFin:             &future,
 				RenovacionAutomatica: false,
 				TieneMetodoPago:      false,
+				CreateAt:             now,
+			}, nil
+		} else if suscEstado == "vencida" || suscEstado == "suspendida" {
+			return &membresiaDomain.MembresiaResponse{
+				UsuarioID:            usuarioID,
+				Estado:               membresiaDomain.MembresiaVencida,
+				FechaInicio:          &now,
+				FechaFin:             fin,
+				RenovacionAutomatica: false,
+				TieneMetodoPago:      false,
+				CreateAt:             now,
 			}, nil
 		}
 	}
@@ -364,6 +449,14 @@ func (s *membresiaService) GetMiMembresia(usuarioID uint) (*membresiaDomain.Memb
 			TieneMetodoPago:      false,
 		}, nil
 	}
+
+	// Para el resto de usuarios (afiliados/consumidores), la membresía NUNCA es de prueba.
+	// Si por inconsistencia histórica tenía 'prueba', se normaliza a 'inactiva'.
+	if membresia.Estado == membresiaDomain.MembresiaPrueba {
+		membresia.Estado = membresiaDomain.MembresiaInactiva
+		_ = s.membRepo.Update(membresia)
+	}
+
 	// 1. Sincronización proactiva con Wompi: Si la membresía está inactiva, verificar pagos pendientes recientes
 	if membresia.Estado != membresiaDomain.MembresiaActiva {
 		var pendingPagos []membresiaDomain.PagoMembresia

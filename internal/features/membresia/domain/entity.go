@@ -9,6 +9,7 @@ const (
 	MembresiaActiva    = "activa"
 	MembresiaVencida   = "vencida"
 	MembresiaCancelada = "cancelada"
+	MembresiaPrueba    = "prueba"
 
 	PagoTipoInicial    = "inicial"
 	PagoTipoRenovacion = "renovacion"

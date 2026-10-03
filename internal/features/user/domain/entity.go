@@ -29,6 +29,10 @@ type User struct {
 	RequiereResetPassword bool           `gorm:"default:false" json:"requiere_reset_password"`
 	FailedAttempts        int            `gorm:"default:0" json:"failed_attempts"`
 	LockedUntil           *time.Time     `json:"locked_until"`
+	FamiliaresExterior        *bool      `gorm:"type:boolean;default:false" json:"familiares_exterior"`
+	ViviendaTipo              *string    `gorm:"type:varchar(50)" json:"vivienda_tipo"`
+	EsEmprendedor             *bool      `gorm:"type:boolean;default:false" json:"es_emprendedor"`
+	DescripcionEmprendimiento *string    `gorm:"type:varchar(255)" json:"descripcion_emprendimiento"`
 }
 
 // TableName overrides the default GORM table name mapping to place the table inside the administrative schema.

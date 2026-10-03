@@ -195,11 +195,11 @@ func (s *authService) Register(req *authDomain.RegisterRequest) (*authDomain.Reg
 		// If invalid, silently ignore
 	}
 
-	// === Step 2: Validate codigo_empresa ===
+	// === Step 2: Validate codigo_empresa or NIT ===
 	var companyForLink *companyDomain.Company
 	codigoEmpresaValido := false
-	if req.CodigoEmpresa != nil && *req.CodigoEmpresa != "" {
-		company, compErr := s.companyRepo.FindByCodigoEmpresa(*req.CodigoEmpresa)
+	if req.CodigoEmpresa != nil && strings.TrimSpace(*req.CodigoEmpresa) != "" {
+		company, compErr := s.companyRepo.FindByCodigoEmpresaOrNIT(strings.TrimSpace(*req.CodigoEmpresa))
 		if compErr == nil && company != nil {
 			companyForLink = company
 			codigoEmpresaValido = true
@@ -222,13 +222,17 @@ func (s *authService) Register(req *authDomain.RegisterRequest) (*authDomain.Reg
 
 	// === Step 4: Create the user ===
 	user := &userDomain.User{
-		Email:     req.Email,
-		Password:  string(hashedPassword),
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		IsActive:  true,
-		RoleID:    &rol.ID,
-		CodeRefer: codeRefer,
+		Email:                      req.Email,
+		Password:                   string(hashedPassword),
+		FirstName:                  req.FirstName,
+		LastName:                   req.LastName,
+		IsActive:                   true,
+		RoleID:                     &rol.ID,
+		CodeRefer:                  codeRefer,
+		FamiliaresExterior:         req.FamiliaresExterior,
+		ViviendaTipo:               req.ViviendaTipo,
+		EsEmprendedor:              req.EsEmprendedor,
+		DescripcionEmprendimiento:  req.DescripcionEmprendimiento,
 	}
 
 	if err := s.userRepo.Create(user); err != nil {
@@ -260,12 +264,44 @@ func (s *authService) Register(req *authDomain.RegisterRequest) (*authDomain.Reg
 		}
 	}
 
-	// === Step 6: Handle user_companies linking if codigo_empresa was valid ===
+	// === Step 6: Handle user_companies linking and empresa_id if codigo_empresa/NIT was valid ===
 	if codigoEmpresaValido && companyForLink != nil {
 		_ = s.db.Exec(
 			"INSERT INTO administrative.user_companies (user_id, company_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
 			user.ID, companyForLink.ID,
 		)
+		_ = s.db.Exec(
+			"UPDATE administrative.users SET empresa_id = ? WHERE id = ?",
+			companyForLink.ID, user.ID,
+		)
+	}
+
+	// === Step 7: Auto-enroll user in active raffle if they have eligible role ('user' or 'user_member') ===
+	roleIsEligible := false
+	if user.Role != nil && (user.Role.Code == "user" || user.Role.Code == "user_member") {
+		roleIsEligible = true
+	} else if user.RoleID != nil {
+		var rCode string
+		_ = s.db.Table("administrative.roles").Where("id = ?", *user.RoleID).Pluck("code", &rCode).Error
+		if rCode == "user" || rCode == "user_member" {
+			roleIsEligible = true
+		}
+	}
+
+	if roleIsEligible {
+		var activeRifa struct {
+			ID uint
+		}
+		if err := s.db.Table("administrative.rifa").Where("estado = ?", "activa").Select("id").First(&activeRifa).Error; err == nil && activeRifa.ID > 0 {
+			var maxNum int
+			row := s.db.Raw("SELECT COALESCE(MAX(NULLIF(regexp_replace(numero_participacion, '[^0-9]', '', 'g'), '')::integer), 0) FROM administrative.participacion_rifa WHERE rifa_id = ?", activeRifa.ID).Row()
+			_ = row.Scan(&maxNum)
+			numTicket := fmt.Sprintf("%06d", maxNum+1)
+			_ = s.db.Exec(`
+				INSERT INTO administrative.participacion_rifa (rifa_id, usuario_id, numero_participacion, origen, fecha_participacion)
+				VALUES (?, ?, ?, 'afiliacion', NOW())
+			`, activeRifa.ID, user.ID, numTicket)
+		}
 	}
 
 	// 7. Reload user with relations for the response
@@ -427,11 +463,11 @@ func (s *authService) UpdateProfile(userID uint, req *authDomain.UpdateProfileRe
 	return fullUser, nil
 }
 
-// ValidarCodigoEmpresa validates a company code and returns the company name.
+// ValidarCodigoEmpresa validates a company code or NIT and returns the company.
 func (s *authService) ValidarCodigoEmpresa(codigo string) (*companyDomain.Company, error) {
-	company, err := s.companyRepo.FindByCodigoEmpresa(codigo)
+	company, err := s.companyRepo.FindByCodigoEmpresaOrNIT(codigo)
 	if err != nil {
-		return nil, errors.New("código de empresa no encontrado")
+		return nil, errors.New("código o NIT de empresa no encontrado")
 	}
 	return company, nil
 }

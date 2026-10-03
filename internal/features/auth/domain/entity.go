@@ -25,12 +25,16 @@ type UserInfo struct {
 
 // RegisterRequest is the payload for the public registration endpoint.
 type RegisterRequest struct {
-	Email          string  `json:"email" binding:"required,email"`
-	Password       string  `json:"password" binding:"required,min=10"`
-	FirstName      string  `json:"first_name" binding:"required"`
-	LastName       string  `json:"last_name" binding:"required"`
-	RefCode        *string `json:"ref_code"`
-	CodigoEmpresa  *string `json:"codigo_empresa"`
+	Email                      string  `json:"email" binding:"required,email"`
+	Password                   string  `json:"password" binding:"required,min=10"`
+	FirstName                  string  `json:"first_name" binding:"required"`
+	LastName                   string  `json:"last_name" binding:"required"`
+	RefCode                    *string `json:"ref_code"`
+	CodigoEmpresa              *string `json:"codigo_empresa"`
+	FamiliaresExterior         *bool   `json:"familiares_exterior"`
+	ViviendaTipo               *string `json:"vivienda_tipo"`
+	EsEmprendedor              *bool   `json:"es_emprendedor"`
+	DescripcionEmprendimiento  *string `json:"descripcion_emprendimiento"`
 }
 
 // RegisterResponse is returned after a successful registration.

@@ -27,6 +27,23 @@ func ExecuteDailyJobs(db *gorm.DB, membSvc domain.MembresiaService) {
 		log.Printf("ℹ️ Expired %d company trial subscription(s)", result.RowsAffected)
 	}
 
+	// 2. Automatically disable benefits of companies whose subscription has ended or is unpaid
+	resBenefits := db.Exec(`
+		UPDATE administrative.benefit
+		SET is_active = false, estado = 'deshabilitado'
+		WHERE company_benefit IN (
+			SELECT id FROM administrative.companies
+			WHERE suscripcion_estado IN ('vencida', 'suspendida')
+			   OR (suscripcion_estado = 'prueba' AND fecha_fin_prueba IS NOT NULL AND fecha_fin_prueba < NOW())
+		)
+		  AND estado != 'deshabilitado'
+	`)
+	if resBenefits.Error != nil {
+		log.Printf("⚠️ Error disabling benefits for unpaid companies: %v", resBenefits.Error)
+	} else if resBenefits.RowsAffected > 0 {
+		log.Printf("ℹ️ Automatically disabled %d benefit(s) belonging to unpaid companies", resBenefits.RowsAffected)
+	}
+
 	// 2. Process automatic renewals for expired active memberships
 	if err := membSvc.RenovarVencidas(); err != nil {
 		log.Printf("⚠️ Error renewing expired memberships: %v", err)
